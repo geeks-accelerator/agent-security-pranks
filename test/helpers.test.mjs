@@ -194,6 +194,23 @@ test('the log tally counts probes, misses, the busiest address and followed link
   assert.doesNotMatch(text + JSON.stringify(r), /203\.0\.113|198\.51\.100|192\.0\.2/);
 });
 
+test('on a site with an API, methods it serves are traffic, not probes', () => {
+  const t = logTally();
+  const line = (ip, m, p, s) => `${ip} - - [23/Oct/2026:01:02:03 +0000] "${m} ${p} HTTP/1.1" ${s} 0 "-" "agent/1"`;
+  for (const l of [
+    line('203.0.113.1', 'POST', '/api/house/care', 200), line('203.0.113.1', 'POST', '/api/house/care', 200),
+    line('203.0.113.2', 'POST', '/api/house/care', 503), line('203.0.113.3', 'POST', '/mcp', 202),
+    line('203.0.113.4', 'POST', '/', 405), line('203.0.113.4', 'PUT', '/', 500),
+    line('203.0.113.5', 'POST', '/contact', 303), line('203.0.113.6', 'POST', '/contact', 303), // a form that redirects
+  ]) t.add(l);
+  const r = t.result();
+  assert.equal(r.probes, 2);
+  assert.deepEqual(r.kinds.map((k) => k.kind).sort(), ['POST requests', 'PUT requests']);
+  assert.deepEqual(r.succeeded_or_crashed.map((h) => h.request), ['500 PUT /']);
+  assert.equal(r.breakdown.rest, 6);
+  assert.deepEqual(t.result(), r, 'result() gives the same report every time');
+});
+
 test('secret-named keys with one-word values are flagged; settings and phrases are not', () => {
   assert.deepEqual(secretAssignments('SECRET_KEY=there-is-no-key-only-a-clock\nDATABASE_PASSWORD=feed-the-ferret-first\nADMIN_TOKEN=consistency'), ['SECRET_KEY', 'DATABASE_PASSWORD', 'ADMIN_TOKEN']);
   const envExample = codeBlocks.find((b) => b.includes('SECRET_MEETING_1'));

@@ -29,9 +29,13 @@ const REAL_PREFIXES = ["/api/", "/docs/", "/mcp", "/[content]/"];
 const isRealPath = (p) => REAL_PREFIXES.some((prefix) => p === prefix.replace(/\/$/, "") || p.startsWith(prefix));
 
 function isProbe(pathname) {
-  const p = decodedPath(pathname);
+  // Routes are case-sensitive, so the exemption is too: compare the prefixes
+  // with the decoded path as it came, and lowercase only for the pattern.
+  // Otherwise /API/.ENV is exempted as the API, yet the API never sees it.
+  let p = pathname;
+  try { p = decodeURIComponent(pathname); } catch {}
   if (isRealPath(p)) return false;
-  return SECRET_PROBE.test(p);
+  return SECRET_PROBE.test(p.toLowerCase());
 }
 ```
 
@@ -85,8 +89,10 @@ const REPLIES = [
 ];
 
 function replyFor(pathname) {
-  const p = decodedPath(pathname);
-  if (isRealPath(p)) return null; // real content first: "Ugly.php" keeps its page
+  let raw = pathname;
+  try { raw = decodeURIComponent(pathname); } catch {}
+  if (isRealPath(raw)) return null; // real content first, case-sensitive like routes: "Ugly.php" keeps its page
+  const p = raw.toLowerCase();
   return REPLIES.find(([re]) => re.test(p))?.[2] ?? null; // null: not a probe, serve the normal 404
 }
 ```
@@ -135,6 +141,8 @@ export function proxy(req: NextRequest) {
 // Don't exclude _next/image from the matcher, or the proxy never sees it.
 export const config = { matcher: ["/((?!_next/static|favicon.ico).*)"] };
 ```
+
+**An early return skips the rest of the proxy.** If your proxy sets security headers further down, on `NextResponse.next()`, a prank returned before that point doesn't get them. That's why `plain()` sets `nosniff` itself: drop it there and P4 fails, though every page still sends it.
 
 If the site takes forms or has an API, refuse only the methods it doesn't use, per route (H1). If the prank needs data the app owns, rewrite to an internal route handler that builds the body and returns status 404, rather than reading files inside the proxy. Keep the `/_next/image` block only if no page uses `next/image`.
 
@@ -253,7 +261,8 @@ test("probes get the prank: 404, no-store, noindex, plain text (P1, P3, P4)", as
   for (const path of ["/.env", "/.git/config", "/.ssh/id_rsa", "/@fs/..%2f.env"]) {
     const res = await get(path);
     assert.equal(res.status, 404, path);
-    assert.match(res.headers.get("cache-control") ?? "", /no-store/, path);
+    const cache = res.headers.get("cache-control") ?? "";
+    assert.ok(/no-store/.test(cache) || Number(/max-age=(\d+)/.exec(cache)?.[1]) <= 86400, `${path}: no-store or a day at most`);
     assert.match(res.headers.get("x-robots-tag") ?? "", /noindex/, path);
     assert.match(res.headers.get("content-type") ?? "", /^text\/plain/, path);
     assert.equal(res.headers.get("x-content-type-options"), "nosniff", path);
@@ -271,7 +280,7 @@ test("unused methods get 405 with Allow, reads still work (H1)", async () => {
   for (const method of ["POST", "PUT"]) {
     const res = await get("/", { method, body: "" });
     assert.equal(res.status, 405, method);
-    assert.equal(res.headers.get("allow"), "GET, HEAD", method);
+    assert.match(res.headers.get("allow") ?? "", /GET, HEAD/, method);
   }
   assert.equal((await get("/")).status, 200);
   assert.equal((await get("/", { method: "HEAD" })).status, 200);

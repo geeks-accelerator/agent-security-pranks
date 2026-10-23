@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.6 (2026-10-23)
+
+From adopting the standard at animalhouse.ai, an app with an API and an MCP endpoint. No check newly fails or warns.
+
+- **`--logs` no longer counts an API's or a form's own traffic as unused methods.** Every request with a method other than GET or HEAD was counted as a probe, so on animalhouse's day of logs 2,310 POSTs were "probes" and 2,217 successful API and MCP calls were listed as "probes that got a 2xx". A method now counts only on a path that never succeeded with it anywhere in the log, which leaves a `POST /` that always gets 405 counted and `POST /api/...` that answers 200 out. On that log the probes went from 5,928 to 3,685, and the probe addresses from 272 to 31. A test covers an API site, and that `result()` gives the same report every time it's called. A method and path that got a 2xx or a 3xx anywhere in the log counts as served, so a form that POSTs and redirects (303) isn't counted either.
+- **recipes.md: the prefix exemption is case-sensitive, like routes.** `isProbe` lowercased the path before checking the exempt prefixes, so `/API/.ENV` was exempted as the API, yet the API never saw it, and it got the ordinary 404 page (C1 warns). It now compares prefixes with the decoded path as it came and lowercases only for the pattern.
+- **recipes.md: an early return skips the rest of the proxy.** A prank returned from a Next.js proxy before the proxy sets its security headers has none of them, and fails P4 while every page passes. The Next.js recipe says so, next to `plain()`, which sets `nosniff` itself.
+- **recipes.md guard tests match the standard:** the probe test accepts `no-store` or a cache of a day or less (P3 allows both since 1.1.0), and the method test accepts an `Allow` that lists more than `GET, HEAD`, as on a site that answers `OPTIONS` for CORS.
+- **docs/adopting.md lessons:** the animalhouse lesson no longer says a test checks all 715 sitemap URLs (a script checked them once; the test builds every route from the app's route folders), and three lessons are new: the case-sensitive exemption, the early return, and the `--logs` count on an API site.
+
 ## 1.1.5 (2026-10-23)
 
 From a second review, each scorecard fix reproduced on a fixture site before it was made. No check newly fails a site; two stop failing safe sites wrongly, so a patch release.
