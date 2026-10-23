@@ -52,15 +52,22 @@ test('every item the scorecard leaves to review is in the standard checklist', (
 });
 
 test('no em dashes in the docs', () => {
-  for (const file of ['README.md', 'STANDARD.md', 'AGENTS.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/adopting.md', 'docs/recipes.md', 'docs/scanner-prank-playbook.md']) {
+  for (const file of ['README.md', 'STANDARD.md', 'AGENTS.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/adopting.md', 'docs/recipes.md', 'docs/scanner-prank-playbook.md', 'docs/research/bots-in-ai-clothing.md']) {
     assert.doesNotMatch(read(file), /\u2014/, file);
   }
 });
 
 test('no code example in the docs is shaped like a credential (P2 applies to examples)', () => {
-  for (const file of ['README.md', 'STANDARD.md', 'docs/adopting.md', 'docs/recipes.md', 'docs/scanner-prank-playbook.md']) {
+  for (const file of ['README.md', 'STANDARD.md', 'docs/adopting.md', 'docs/recipes.md', 'docs/scanner-prank-playbook.md', 'docs/research/bots-in-ai-clothing.md']) {
     for (const [, block] of read(file).matchAll(/```[a-z]*\n([\s\S]*?)```/g)) assert.deepEqual(credentialShapes(block), [], `${file}: ${block.slice(0, 60)}`);
   }
+});
+
+test('every image and local link in the research page exists', () => {
+  const page = read('docs/research/bots-in-ai-clothing.md');
+  const targets = [...page.matchAll(/\]\(([^)#\s]+)(?:#[^)]*)?\)/g)].map((m) => m[1]).filter((t) => !/^https?:/.test(t));
+  assert.ok(targets.filter((t) => t.endsWith('.svg')).length >= 10, 'the page shows its charts');
+  for (const t of targets) assert.doesNotThrow(() => readFileSync(new URL(`../docs/research/${t}`, import.meta.url)), t);
 });
 
 test('score counts passes and ignores skipped checks', () => {

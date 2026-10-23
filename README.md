@@ -37,10 +37,11 @@ This repo holds:
 - **[STANDARD.md](STANDARD.md):** the Agent Security Pranks Standard. What to do, item by item, each with an ID, a level and the harm it prevents: hardening (H), prank rules (P), things never to do (X), what to serve (C), and tests and measurement (T).
 - **`security-pranks-audit`:** the scorecard. It checks a live site against everything the standard can verify from outside, 12 checks in about 20 requests, and lists what it can't see for you to review.
 - **[The Scanner Prank Playbook](docs/scanner-prank-playbook.md):** the field guide the standard comes from, with the measurements, the menu of pranks and code for Next.js, Express and nginx.
+- **[Bots in AI clothing](docs/research/bots-in-ai-clothing.md):** a week of traffic across 56 domains on Cloudflare, with charts. 1 in 12 requests was a probe, none came from a verified AI crawler, and the biggest scanner wore twenty AI-crawler names.
 
 ## Why this one
 
-- **Welcoming by design.** The real AI crawlers don't probe: across one owner's sites, none of the probes came from a verified bot, and the biggest scanner wore twenty AI-crawler names as a disguise. So nothing here keys on names or verification (X3). It answers the request for `/.env`, whoever sends it.
+- **Welcoming by design.** The real AI crawlers don't probe: across one owner's sites, none of 448k probes came from a verified bot, and the biggest scanner wore twenty AI-crawler names as a disguise ([the research](docs/research/bots-in-ai-clothing.md)). So nothing here keys on names or verification (X3). It answers the request for `/.env`, whoever sends it.
 - **Built from logs.** On a network of eleven small sites, about 64% of requests were 404s, nearly all of them probes: 1,806 requests for secrets in 16 hours. Each item says what harm it prevents, and the claims cite RFCs and official docs with dates.
 - **It checks that the joke can't backfire.** A prank served with a 200 puts your domain on shared target lists (P1). A fake key in it is a false alarm for a stranger to chase (P2). A prank that leaks into ordinary 404s confuses your readers (P8). The audit fails each of these.
 - **Hardening first, joke second.** Refusing unused methods (H1) and framework endpoints (H2) is what keeps the site safe. A prank is optional; a site with none can pass every required check.
@@ -126,7 +127,7 @@ To switch a project over, give its coding agent one line:
 
 ## Where it comes from
 
-The [Scanner Prank Playbook](docs/scanner-prank-playbook.md) came from a deployment on a network of eleven civic-guide sites, including [upstateny.news](https://upstateny.news), in October 2026: one day of logs, the hardening that turned scanner 500s into 405s, and a prank that answers `/.env` with the region's public meetings. The standard turns its rules into items, each with the harm it prevents, and checks them against the RFCs. It follows the shape of its sister project, [agent-and-search-readiness](https://github.com/geeks-accelerator/agent-and-search-readiness).
+The [Scanner Prank Playbook](docs/scanner-prank-playbook.md) came from a deployment on a network of eleven civic-guide sites, including [upstateny.news](https://upstateny.news), in October 2026: one day of logs, the hardening that turned scanner 500s into 405s, and a prank that answers `/.env` with the region's public meetings. The standard turns its rules into items, each with the harm it prevents, and checks them against the RFCs. Later evidence came from a day of logs at animalhouse.ai, an app with an API, and from [Bots in AI clothing](docs/research/bots-in-ai-clothing.md), a week across one owner's 56 domains on Cloudflare, which is where the standard's welcome for every agent (X3) comes from. It follows the shape of its sister project, [agent-and-search-readiness](https://github.com/geeks-accelerator/agent-and-search-readiness).
 
 An item is in the standard when most small public sites should do it, not because one site happens to. If you find something wrong or out of date, open an issue or a pull request.
 

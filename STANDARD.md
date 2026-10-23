@@ -73,7 +73,7 @@ What it adds:
 - **One address can be most of it.** A rate limit at the CDN for an address like that removes most of the noise; the rest can get the joke.
 - **Some scanners are language models that read the answer,** which is why a prank can speak to them (C2), and why it must not give them orders.
 
-A week across one owner's sites on Cloudflare's Free plan (October 16 to 23, 2026, Cloudflare's sampled counts; "Bots in AI clothing"). The managed sites:
+A week across one owner's sites on Cloudflare's Free plan (October 16 to 23, 2026, Cloudflare's sampled counts; [Bots in AI clothing](docs/research/bots-in-ai-clothing.md), with charts). The managed sites:
 
 | Sites | Domains | Requests | Probes | Verified AI crawlers and assistants |
 |---|---|---|---|---|
@@ -448,7 +448,7 @@ Read 2026-10-23.
 - **WHATWG Fetch Standard:** [`X-Content-Type-Options`](https://fetch.spec.whatwg.org/#x-content-type-options-header). (P4)
 - **Next.js:** [Image optimization](https://nextjs.org/docs/app/api-reference/components/image) (the `/_next/image` endpoint) and the project's [security advisories](https://github.com/vercel/next.js/security/advisories). The 2026 advisory for the image optimizer is reported by the playbook; cite it here by its advisory ID when this item is next revised. (H2)
 - **Cloudflare:** [custom rules](https://developers.cloudflare.com/waf/custom-rules/) (Free: 5 rules, no regex), [rate limiting rules](https://developers.cloudflare.com/waf/rate-limiting-rules/) (Free: 1 rule, IP counting, 10-second period), [security features interoperability](https://developers.cloudflare.com/waf/feature-interoperability) (Bot Fight Mode can't be skipped by custom rules), [fields reference](https://developers.cloudflare.com/ruleset-engine/rules-language/fields/reference/) (`cf.client.bot`). The AI Crawl Control defaults (Search, Agent and Training groups, agents blocked on pages with ads for new domains from 2026-09-15) are from secondary reports; check your zone. (H4, X3)
-- **"Bots in AI clothing":** one owner's week of Cloudflare analytics, October 16 to 23, 2026 (revised the same day: probes counted on the full set with 21 path patterns): the third table in §2 and the crawler-name impersonation.
+- **[Bots in AI clothing](docs/research/bots-in-ai-clothing.md):** one owner's week of Cloudflare analytics, October 16 to 23, 2026 (revised the same day: probes counted on the full set with 21 path patterns): the third table in §2 and the crawler-name impersonation.
 - **Sysdig Threat Research,** [an LLM agent in a Marimo intrusion](https://sysdig.com/blog/ai-agent-at-the-wheel-how-an-attacker-used-llms-to-move-from-a-cve-to-an-internal-database-in-4-pivots) (2026-05-26): 12 cloud API calls spread across 11 Cloudflare Workers addresses in 22 seconds. Why per-address rules and names are weak signals (X3).
 - **animalhouse.ai's logs:** 24 hours to 2026-10-23, counted by the project's own agent: the second table in §2, the probe families beyond secret files, and the first draft of per-family replies that led to the P2 name rule and the C2 invitation rule.
 - **The Scanner Prank Playbook** ([docs/scanner-prank-playbook.md](docs/scanner-prank-playbook.md)): the traffic numbers in §2, the rules, and the first image-endpoint check that couldn't fail (H2, T1). October 2026.
