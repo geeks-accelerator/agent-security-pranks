@@ -6,7 +6,7 @@
 
 **Check how your site answers the bots and agents hunting it for secrets:** `/.env`, `/.git/config`, SSH keys, `/.aws/credentials`, `wp-config.php`. A standard for refusing what your site never needs and answering the rest with a harmless joke, and a command-line audit that probes a live site the way scanners do and checks every answer. No account, no API key, no dependencies.
 
-It's for websites you run and manage, that welcome AI agents and crawlers and are tired of the scanners. It answers what a request asks for, never who it claims to be: nothing here blocks or challenges an agent, verified or not.
+The standard gives rules and examples, not values: what your prank says, and how, is yours to invent. It's for websites you run and manage, that welcome AI agents and crawlers and are tired of the scanners. It answers what a request asks for, never who it claims to be: nothing here blocks or challenges an agent, verified or not.
 
 ```
 npx security-pranks-audit example.com

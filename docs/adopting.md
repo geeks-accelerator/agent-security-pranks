@@ -34,7 +34,7 @@ Everything below is for that agent. The lessons at the end come from the sites t
    - If it states facts, build them from the same source the site publishes (P7).
    - Add a note for AI agents that invites the operator, with a link (C2). Never tell the agent to send a request, run a command or register: that's a prompt injection, however friendly.
    - Optionally, put a one-line version of the note in an `X-` header of the site's own naming, on the prank's answers only (C2).
-   - The examples in the standard and recipes are placeholders: the wording, names, tags and what the prank offers are the project's own. Match the rules, not the examples.
+   - The examples in the standard and recipes are placeholders: the wording, names, tags and what the prank offers are the project's own. Match the rules, not the examples, and be creative: write something only this project would say.
    - Keep every probe answer a 4xx, even on a static site with nothing to leak: a 200 is read as "found" whatever the body says (P1).
    - End the note with a link to `/.well-known/security.txt`, and serve that file if the site doesn't yet: a real inbox and an `Expires` under a year ahead ([recipes.md](recipes.md)). The joke is for scanners; a real researcher needs a way to report.
    - A prank is optional. If the owner doesn't want one, skip this step, record C1 as declined with the reason, and do the rest: the hardening and the rules are what keep the site safe.
