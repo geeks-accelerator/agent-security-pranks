@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.5 (2026-10-23)
 
 From a second review, each scorecard fix reproduced on a fixture site before it was made. No check newly fails a site; two stop failing safe sites wrongly, so a patch release.
 
