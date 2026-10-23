@@ -16,15 +16,17 @@ test('VERSION matches package.json', () => {
   assert.equal(VERSION, pkg.version);
 });
 
-test('the docs and the CLI name the Node version package.json requires', () => {
-  const floor = pkg.engines.node.match(/^>=(\d+)\.\d+\.\d+$/)?.[1];
-  assert.ok(floor, `engines.node should be ">=N.N.N", got ${pkg.engines.node}`);
-  for (const file of ['README.md', 'STANDARD.md', 'AGENTS.md']) {
-    const named = [...read(file).matchAll(/Node (\d+) or later/g)].map((m) => m[1]);
-    assert.ok(named.length, `${file} names no Node version`);
-    assert.deepEqual([...new Set(named)], [floor], file);
+test('the docs and the CLI name the Node versions package.json requires', () => {
+  // engines.node lists each supported line at its security release: "^22.23.4 || ^24.22.1 || >=26.12.1".
+  const versions = [...pkg.engines.node.matchAll(/(\d+)\.(\d+)\.(\d+)/g)].map((m) => m[0]);
+  assert.ok(versions.length >= 2, `engines.node should list each supported line, got ${pkg.engines.node}`);
+  const table = `NODE_LINES = { ${versions.map((v) => `${v.split('.')[0]}: '${v}'`).join(', ')} }`;
+  assert.ok(read('bin/security-pranks-audit.mjs').includes(table), `the CLI should declare ${table}`);
+  for (const file of ['README.md', 'STANDARD.md', 'AGENTS.md', 'SECURITY.md', 'docs/adopting.md']) {
+    const text = read(file);
+    for (const v of versions) assert.ok(text.includes(v), `${file} doesn't name Node ${v}`);
+    assert.doesNotMatch(text, /Node \d+ or later/, `${file} names a single Node floor`);
   }
-  assert.match(read('bin/security-pranks-audit.mjs'), new RegExp(`NODE_MIN = '${pkg.engines.node.slice(2).replace(/\./g, '\\.')}'`));
 });
 
 test('every check the scorecard runs is in the standard checklist, at the level it gives', () => {

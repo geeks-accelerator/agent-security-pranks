@@ -17,7 +17,7 @@ We measured one day of HTTP logs on a network of eleven small static sites. Most
 | **~69** | distinct addresses doing the hunting |
 | **0** | probes that found anything |
 
-The shopping list is always the same: `/.env` in every variation, `/.git/config`, SSH keys, `/.aws/credentials`, `/proc/self/environ`, `wp-config.php`, plus framework-specific pokes such as fake Next.js Server Action POSTs. Many probes claim to be Googlebot or another well-known crawler. One address sent 1,737 requests with plain `curl`.
+The shopping list is always the same: `/.env` in every variation, `/.git/config`, SSH keys, `/.aws/credentials`, `/proc/self/environ`, `wp-config.php`, plus framework-specific pokes such as fake Next.js Server Action POSTs. Many probes claim to be Googlebot or another well-known crawler. One address sent 1,876 requests, 1,737 of them 404s, with plain `curl`.
 
 ## First, make the target smaller
 

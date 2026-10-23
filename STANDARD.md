@@ -7,7 +7,7 @@
 
 > **Start here**
 > 1. Read a day of your request logs: `npx security-pranks-audit --logs <access-log>`. Count the probes, and any that got a 2xx or a 5xx.
-> 2. Score your site: `npx security-pranks-audit <domain>`. It needs Node 26 or later, with current security releases, and no dependencies. Run it only against sites you run.
+> 2. Score your site: `npx security-pranks-audit <domain>`. It needs Node 22.23.4, 24.22.1 or 26.12.1, or later on the same line (each supported line's current security release), and no dependencies. Run it only against sites you run.
 > 3. Fix required failures first. Each line the scorecard prints names an ID and the reason.
 > 4. A prank is optional (C1). The hardening (H) and the rules (P, X) are what keep the site safe; the joke is a garnish.
 > 5. After you ship, run `--logs` again on a day of logs, and compare.
@@ -45,10 +45,13 @@ One day of HTTP logs on a network of eleven small static sites (the playbook, Oc
 | Measure | Value |
 |---|---|
 | Requests that were 404s, nearly all of them probes | about 64% |
-| Requests for secrets in 16 hours | 1,806 |
-| Distinct addresses doing the hunting | about 69 |
+| Requests for secrets in 16 hours (the playbook's own filter) | 1,806 |
+| Distinct addresses doing the hunting (the playbook's own filter) | about 69 |
+| The same log counted by `--logs` 1.1.0: probes, and the addresses sending them | 1,722 from 65 |
 | Probes that found anything | 0 |
-| Requests from the busiest single address, all with plain `curl` | 1,737 |
+| Requests from the busiest single address, all with plain `curl`, to one site | 1,876 (1,737 of them 404s) |
+
+The playbook counted secret requests with a one-off filter that also took in `.php`, WordPress, source map and backup paths; `--logs` counts by its own probe families, so its figure for the same 5,000 lines (23:08 UTC on 2026-10-22 to 14:53 UTC on 2026-10-23) differs slightly. Compare a site's own before and after with `--logs`, not with these figures.
 
 What it means:
 

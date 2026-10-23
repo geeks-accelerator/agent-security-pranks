@@ -131,12 +131,21 @@ const blocked = (req, res) => res.writeHead(403, { server: 'cloudflare', 'conten
 
 const HANDLERS = { good, broken, api, cheeky, static: staticSite, alias, blocked };
 
-/** Start one fixture site. Returns { base, log, close }. */
+/** Start one fixture site. Returns { base, domain, log, hosts, close }. */
 export async function startFixture({ kind = 'good', domain = `${kind}.example` } = {}) {
   const log = [];
+  const hosts = new Set(); // every Host header the site received
   const handler = HANDLERS[kind];
   const server = createServer((req, res) => {
     const path = req.url.split('?')[0];
+    // Like a server that runs several sites, answer only for this domain (and its www twin).
+    // A request that names any other host, such as 127.0.0.1:<port>, gets nothing of the site.
+    const host = String(req.headers.host ?? '').toLowerCase();
+    hosts.add(host);
+    if (host !== domain && host !== `www.${domain}`) {
+      res.writeHead(421, { 'content-type': 'text/plain' }).end(`No site for ${host}\n`);
+      return;
+    }
     res.on('finish', () => log.push(`127.0.0.1 - - [23/Oct/2026:12:00:00 +0000] "${req.method} ${req.url} HTTP/1.1" ${res.statusCode} 0 "-" "${req.headers['user-agent'] ?? '-'}"`));
     handler(req, res, path, domain);
   });
@@ -145,6 +154,7 @@ export async function startFixture({ kind = 'good', domain = `${kind}.example` }
     base: `http://127.0.0.1:${server.address().port}`,
     domain,
     log,
+    hosts,
     close: () => new Promise((r) => { server.closeAllConnections(); server.close(r); }),
   };
 }

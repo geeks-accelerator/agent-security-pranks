@@ -5,12 +5,12 @@
 // The standard and what each ID means: STANDARD.md in
 // https://github.com/geeks-accelerator/agent-security-pranks
 // Requests only the site you name (and its www or bare twin): GETs, a HEAD, and an empty POST and
-// PUT to / that create nothing. It never follows a redirect off the site. Node 26 or later, no dependencies.
+// PUT to / that create nothing. It never follows a redirect off the site. Node 22, 24 or 26 at its security release, no dependencies.
 
 import { request, TIMEOUT_MS } from './http.mjs';
 import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, SCANNER_TAG, agentHeaders } from './helpers.mjs';
 
-export const VERSION = '1.1.2';
+export const VERSION = '1.1.3';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
 const UA = `security-pranks-audit/${VERSION} (+${REPO})`;
 export const LEVELS = ['required', 'recommended'];
@@ -35,7 +35,7 @@ export const looksLikePrank = (text) => (String(text ?? '').match(/^\s*(?:export
 
 export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}) {
   const rand = Math.random().toString(36).slice(2, 10);
-  const { hosts, baseOrigin, toBase, fromBase } = baseMapper(domain, base);
+  const { hosts, baseOrigin, toBase, fromBase, hostFor } = baseMapper(domain, base);
   const onSite = (url) => { try { return hosts.has(new URL(url).hostname); } catch { return false; } };
 
   // One request in the domain's terms. Only the site's own hosts are ever requested.
@@ -43,7 +43,11 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     for (let hop = 0; ; hop++) {
       if (!onSite(url)) return { status: 0, headers: new Headers(), text: '', ms: 0, url, type: '', error: 'refused: not this site' };
       const target = toBase(url);
-      const res = await request(target, { method, body, userAgent: UA, timeoutMs });
+      // With --base on a local build, the request names the domain as its Host, so a server
+      // that picks its site by Host serves the site being scored rather than its default.
+      const host = hostFor(url);
+      const headers = host ? { host } : {};
+      const res = await request(target, { method, body, headers, userAgent: UA, timeoutMs });
       const loc = res.headers.get('location');
       const next = loc ? fromBase(new URL(loc, target).href) : null;
       if (follow && res.status >= 300 && res.status < 400 && next && onSite(next) && hop < 5) { url = next; continue; }

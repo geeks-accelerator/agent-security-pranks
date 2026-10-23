@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.3 (2026-10-23)
+
+From a review of `docs/adopting.md` (PR #1), each fix checked against our own sites.
+
+- **`--base` on a local build names the domain as the Host.** It sent `Host: localhost:<port>`, so a server that runs several sites by Host (a multi-site app, a multi-tenant host, a virtual host) answered with its default site, and the scorecard graded that site under the domain's name. On one such app it reported 10 of 10 for a domain while scoring another, and the sitemap check fell back to the homepage. A hosted preview (`https://<branch>.vercel.app`) keeps its own name, since its host routes by it. The fixture sites now answer only for their own domain, and a test checks every request names it.
+- **What counts as a local build is wider:** besides `localhost`, loopback addresses and `*.localhost`, also `0.0.0.0`, private network addresses (`10.x`, `172.16-31.x`, `192.168.x`, `fc00::/7`), single-label names like a Docker service (`http://web:3000`) and `*.local`, `*.internal` and `*.test` names. A public hostname (a hosted preview) keeps its own name.
+- **Node 22.23.4 and 24.22.1 are accepted,** as well as 26.12.1: each supported line at its current security release (the 2026-10-21 release fixed the same Brotli and TLS bugs in all three). End-of-life and odd-numbered lines still exit 2. CI runs the tests on all three lines. Odd-numbered lines newer than 26 are refused too, not only older ones. CI installs the latest release of each line (`check-latest`), since a runner's cached Node can sit below a line's security release.
+- **docs/adopting.md** asks the owner before the deploy, where it used to ask after, and explains exit code 2 (nothing was scored). **STANDARD.md §2** gives the busiest address's count as 1,876 requests (1,737 of them 404s), where it gave the 404s alone, and sets the playbook's figures beside what `--logs` counts on the same log.
+
 ## 1.1.2 (2026-10-23)
 
 - **P1's static-site exception is withdrawn.** A 200 on any probe fails P1 again, on every site, whatever the answer's headers say (`X-Static-Site` no longer means anything). The harm P1 prevents is in how scanners, target lists and security vendors read the status code, not in what the site holds, and a 404 carries the same joke. STANDARD.md P1 now warns against it and lists it under "Considered and left out". It shipped earlier the same day in 1.1.0.

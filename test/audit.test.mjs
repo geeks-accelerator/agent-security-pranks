@@ -10,10 +10,19 @@ import { startFixture } from './fixture-site.mjs';
 
 const run = async (kind) => {
   const site = await startFixture({ kind });
-  try { return { rep: await audit(site.domain, { base: site.base, timeoutMs: 1500 }), log: site.log }; }
+  try { return { rep: await audit(site.domain, { base: site.base, timeoutMs: 1500 }), log: site.log, hosts: site.hosts }; }
   finally { await site.close(); }
 };
 const byId = (rep) => Object.fromEntries(rep.results.map((r) => [r.id, r]));
+
+test('--base names the domain as the Host, so a server with several sites serves the right one', async () => {
+  // The fixtures answer only for their own domain, like a server that runs several sites.
+  // Before 1.1.3, --base sent Host: 127.0.0.1:<port>, and such a server scored whatever it
+  // served by default, under the domain's name.
+  const { rep, hosts } = await run('good');
+  assert.deepEqual([...hosts].filter((h) => h !== 'good.example' && h !== 'www.good.example'), []);
+  assert.equal(rep.prank, true);
+});
 
 test('the good fixture passes every scored check', async () => {
   const { rep, log } = await run('good');

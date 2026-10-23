@@ -1,5 +1,7 @@
 // Pure helpers the checks share, tested without a network. Internal: the package exports only audit.mjs.
 
+import { isIP } from 'node:net';
+
 /**
  * The playbook's pattern for secret-hunting paths, matched against the URL-decoded, lowercased
  * path (decodedPath) so `/@fs/..%2f.env` and `/API/.ENV` count. The last alternative matches any
@@ -228,10 +230,28 @@ export function withoutPath(text, path) {
   return out.replace(/\s+/g, ' ').trim();
 }
 
+/** True for a host that can only be a local build: not a public hostname. */
+export function isLocalHost(host) {
+  const h = String(host ?? '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!h) return false;
+  if (isIP(h) === 4) {
+    const [a, b] = h.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  }
+  if (isIP(h) === 6) return h === '::' || h === '::1' || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || h.startsWith('::ffff:') && isLocalHost(h.slice(7));
+  return !h.includes('.') || /\.(localhost|local|internal|test|lan|home\.arpa)$/.test(h);
+}
+
 /**
  * For --base: request a local or preview build as if it were the domain.
  * toBase() sends the site's URLs (the domain or its www twin) to the base;
  * fromBase() maps them back, so every check keeps seeing the domain's URLs.
+ * hostFor() is the Host header to send. A local build is asked for the domain, so a server that
+ * runs several sites answers as the one being scored: anything that isn't a public hostname
+ * (localhost, a loopback, unspecified or private address, a single-label name like a Docker
+ * service, or a .localhost, .local, .internal, .test, .lan or .home.arpa name). A preview on a
+ * public host keeps its own name: the host routes by it, and the domain would reach production
+ * or nothing.
  */
 export function baseMapper(domain, base) {
   const hosts = new Set([domain, domain.startsWith('www.') ? domain.slice(4) : `www.${domain}`]);
@@ -243,7 +263,10 @@ export function baseMapper(domain, base) {
     return hosts.has(u.hostname) ? baseOrigin + u.pathname + u.search : url;
   };
   const fromBase = (url) => (baseOrigin && (url === baseOrigin || url.startsWith(`${baseOrigin}/`) || url.startsWith(`${baseOrigin}?`)) ? `https://${domain}${url.slice(baseOrigin.length) || '/'}` : url);
-  return { hosts, baseOrigin, toBase, fromBase };
+  const baseHost = baseOrigin ? new URL(baseOrigin).hostname.replace(/^\[|\]$/g, '') : '';
+  const local = isLocalHost(baseHost);
+  const hostFor = (url) => (local ? new URL(url).host : undefined);
+  return { hosts, baseOrigin, toBase, fromBase, hostFor };
 }
 
 /** A sitemap's <loc> URLs, split into pages and child sitemaps (for a sitemap index). */

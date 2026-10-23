@@ -100,6 +100,17 @@ test('baseMapper sends the site and its www twin to the base, and maps answers b
   assert.equal(fromBase('http://localhost:3000/about'), 'https://example.com/about');
 });
 
+test('baseMapper names the domain as the Host for a local build, and leaves a hosted preview its own', () => {
+  for (const base of ['http://localhost:3000', 'http://127.0.0.1:8080', 'http://[::1]:3000', 'http://example.localhost:4400', 'http://0.0.0.0:3000', 'http://192.168.1.20:3000', 'http://10.0.0.5:8080', 'http://172.20.0.3', 'http://web:3000', 'http://myapp.test:8080', 'http://box.local', 'http://[fd00::5]:3000']) {
+    assert.equal(baseMapper('example.com', base).hostFor('https://www.example.com/.env'), 'www.example.com', base);
+  }
+  // A preview host routes by its own name; the domain there would reach production or nothing.
+  assert.equal(baseMapper('example.com', 'https://my-app-git-fix.vercel.app').hostFor('https://example.com/.env'), undefined);
+  assert.equal(baseMapper('example.com', 'https://staging.example.com').hostFor('https://example.com/.env'), undefined);
+  assert.equal(baseMapper('example.com', 'http://203.0.113.10:8080').hostFor('https://example.com/.env'), undefined);
+  assert.equal(baseMapper('example.com', null).hostFor('https://example.com/'), undefined);
+});
+
 test('compare reads a status page and a JSON report, and lists what changed', () => {
   const page = 'Generated 2026-10-01 by x\n\n| ID | Check | Level | a.example | b.example |\n|---|---|---|---|---|\n| P1 | Probes | required | ✓ | ✗ |\n| C1 | Prank | recommended | ! | ✓ |';
   const prev = parsePrevious(page, 'a.example');
