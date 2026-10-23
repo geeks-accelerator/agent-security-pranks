@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, agentHeaders, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
+import { isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, agentHeaders, taggedLinks, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
 import { looksLikePrank } from '../src/audit.mjs';
 import { parseLine, family, probeKind, logTally, formatLogs } from '../src/logs.mjs';
 
@@ -151,14 +151,14 @@ test('probeKind counts secret paths, framework endpoints and unused methods, not
 });
 
 test('the log tally counts probes, misses, the busiest address and followed links, never addresses', () => {
-  const t = logTally();
+  const t = logTally({ tags: ['wrong-turn', 'never-used'] });
   const line = (ip, m, p, s, ua) => `${ip} - - [23/Oct/2026:01:02:03 +0000] "${m} ${p} HTTP/1.1" ${s} 0 "-" "${ua}"`;
   const scanner = Array.from({ length: 30 }, (_, i) => line('192.0.2.50', 'GET', i % 2 ? `/guess-${i}` : `/actuator/heapdump${i}`, 404, '-'));
   for (const l of [
     line('203.0.113.1', 'GET', '/.env', 404, 'curl/8'), line('203.0.113.1', 'GET', '/.git/config', 404, 'curl/8'),
     line('203.0.113.2', 'GET', '/.env', 200, 'Googlebot'), line('203.0.113.3', 'POST', '/', 500, 'python-requests/2'),
     line('198.51.100.7', 'GET', '/about', 200, 'Mozilla/5.0'), line('198.51.100.7', 'GET', '/nope', 404, 'Mozilla/5.0'),
-    line('198.51.100.8', 'GET', '/?ref=scanner-env', 200, 'Mozilla/5.0'), ...scanner, 'garbage',
+    line('198.51.100.8', 'GET', '/journeys?utm_source=wrong-turn', 200, 'Mozilla/5.0'), ...scanner, 'garbage',
   ]) t.add(l);
   const r = t.result();
   assert.equal(r.lines, 38);
@@ -172,7 +172,8 @@ test('the log tally counts probes, misses, the busiest address and followed link
   assert.equal(r.kinds.find((k) => k.kind === 'Spring actuator and heap dumps').requests, 15);
   assert.deepEqual(r.kinds.find((k) => k.kind === 'env files').statuses, { 404: 1, 200: 1 });
   assert.deepEqual(r.succeeded_or_crashed.map((h) => h.request).sort(), ['200 GET /.env', '500 POST /']);
-  assert.deepEqual(r.prank_links_followed, { 'ref=scanner-env': 1 });
+  assert.deepEqual(r.prank_links_followed, { 'wrong-turn': 1, 'never-used': 0 });
+  assert.equal(logTally().result().prank_links_followed, null); // without --tag, nothing is assumed
   assert.deepEqual(r.probes_under_crawler_names, { requests: 1, names: { googlebot: 1 } });
   const text = formatLogs(r).join('\n');
   assert.match(text, /The busiest address sent 30 requests \(81\.1% of all traffic\)/);
@@ -200,6 +201,13 @@ test('securityTxtProblem wants text/plain, a Contact and an unexpired Expires', 
 test('agent notes in headers are found', () => {
   const h = new Headers({ 'x-note-for-agents': 'You were built to explore, artificial mind.', 'x-request-id': 'abc', server: 'nginx' });
   assert.deepEqual(agentHeaders(h), [['x-note-for-agents', 'You were built to explore, artificial mind.']]);
+});
+
+test('any tagged link counts, whatever parameter and value the site chose', () => {
+  assert.deepEqual(taggedLinks('# see https://example.com/journeys?utm_source=wrong-turn'), ['https://example.com/journeys?utm_source=wrong-turn']);
+  assert.deepEqual(taggedLinks('MORE=https://example.com/hours?from=dotenv'), ['https://example.com/hours?from=dotenv']);
+  assert.deepEqual(taggedLinks('# relative: /meetings?src=probe-git'), ['/meetings?src=probe-git']);
+  assert.deepEqual(taggedLinks('# https://example.com/plain'), []);
 });
 
 test('cacheProblem allows no-store and a day or less', () => {

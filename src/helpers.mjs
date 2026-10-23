@@ -215,8 +215,11 @@ export function agentHeaders(headers) {
   return out;
 }
 
-/** A link in a prank tagged so follow-through can be counted (C1, T2): ?ref=scanner-..., source=scanner:... */
-export const SCANNER_TAG = /[?&](ref|source|utm_source)=scanner[-:_.\w]*/i;
+/**
+ * Links in a prank that carry a query string, so a visit through them can be counted (C1, T2).
+ * Any parameter and value the site's analytics reads: the standard sets no tag format.
+ */
+export const taggedLinks = (text) => [...String(text ?? '').matchAll(/https?:\/\/[^\s"'<>]+\?[^\s"'<>]+|(?<=[\s"'(])\/[^\s"'<>]*\?[^\s"'<>]+/g)].map((m) => m[0]);
 
 /**
  * A probe answer with the requested path removed, so a page that echoes the path compares

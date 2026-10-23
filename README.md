@@ -68,7 +68,7 @@ It needs Node 22.23.4, 24.22.1 or 26.12.1, or later on the same line (each suppo
 ```
 security-pranks-audit <domain> [--json] [--compare previous] [--base url]
 security-pranks-audit --matrix <domain> <domain> ... [--compare previous]
-security-pranks-audit --logs <access-log> [--json]
+security-pranks-audit --logs <access-log> [--tag text ...] [--json]
 ```
 
 | Option | What it does |
@@ -77,6 +77,7 @@ security-pranks-audit --logs <access-log> [--json]
 | `--base url` | score a local or preview build as the domain before you deploy (`--base http://localhost:3000`) |
 | `--compare file` | list what changed since a previous run: a status page from `--matrix` or a saved `--json` report |
 | `--matrix` | score several sites, three at a time, and print one markdown status page |
+| `--tag text` | with `--logs`, count the requests that arrive through your prank's links: pass the tag they carry (any format), once per tag |
 | `--logs file` | count probes in an exported access log (combined log format, or JSON lines from Cloudflare, Vercel or Railway): secret files, dev-server file reads, actuator and heap dumps, framework logs, backups, WordPress and PHP, infrastructure endpoints, unused methods. By kind, status and client family, with the busiest address's share of traffic, probes sent under well-known crawler names, any probe that got a 2xx or a 5xx, and the prank's tagged links that came back. It prints counts, never addresses |
 
 From a clone, run `node bin/security-pranks-audit.mjs example.com`.

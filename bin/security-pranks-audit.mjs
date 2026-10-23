@@ -4,7 +4,7 @@
 //
 //   security-pranks-audit <domain> [--json] [--compare previous] [--base url]
 //   security-pranks-audit --matrix <domain> <domain> ...   (a markdown status page)
-//   security-pranks-audit --logs <access-log> [--json]     (probe counts, before and after)
+//   security-pranks-audit --logs <access-log> [--tag text ...] [--json]   (probe counts, before and after)
 //
 // Exits 1 when a required check fails, so it can gate a deploy.
 
@@ -47,7 +47,8 @@ const valueOf = (name) => (flag(name) ? args[args.indexOf(name) + 1] : undefined
 const comparePath = valueOf('--compare');
 const base = valueOf('--base');
 const logsPath = valueOf('--logs');
-const domains = args.filter((a, i) => !a.startsWith('-') && !['--compare', '--base', '--logs'].includes(args[i - 1]))
+const tags = args.filter((a, i) => args[i - 1] === '--tag');
+const domains = args.filter((a, i) => !a.startsWith('-') && !['--compare', '--base', '--logs', '--tag'].includes(args[i - 1]))
   .map((d) => d.replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase());
 if (base) {
   let u;
@@ -56,7 +57,7 @@ if (base) {
 }
 
 if (logsPath) {
-  const tally = logTally();
+  const tally = logTally({ tags });
   try {
     for await (const line of createInterface({ input: createReadStream(logsPath), crlfDelay: Infinity })) tally.add(line);
   } catch (e) { console.error(`Couldn't read ${logsPath}: ${e.message}`); process.exit(2); }
@@ -75,7 +76,7 @@ credential, no-store, noindex, plain text, no retaliation.
 Usage:
   security-pranks-audit <domain> [--json] [--compare previous] [--base url]
   security-pranks-audit --matrix <domain> <domain> ...
-  security-pranks-audit --logs <access-log> [--json]
+  security-pranks-audit --logs <access-log> [--tag text ...] [--json]
 
 Options:
   --json        print the results as JSON
@@ -87,6 +88,8 @@ Options:
   --logs f      count secret-hunting probes in an exported access log
                 (combined log format or JSON lines), by kind, status and
                 client family; prints counts, never addresses
+  --tag text    with --logs: count requests whose query carries this text,
+                the tag your prank's links use (repeat for each tag)
 
 Run it only against sites you run: its requests look like the scanners it
 checks for, in your logs and to a firewall. It sends about 20 requests,

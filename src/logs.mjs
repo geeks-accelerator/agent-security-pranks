@@ -1,7 +1,7 @@
 // --logs: count secret-hunting probes in an exported access log, before and after (T2).
 // Pure: the CLI feeds it lines. It prints counts and client families, never addresses.
 
-import { probeFamily, knownProbe, OTHER_PROBE_FAMILIES, FRAMEWORK_ENDPOINTS, SCANNER_TAG } from './helpers.mjs';
+import { probeFamily, knownProbe, OTHER_PROBE_FAMILIES, FRAMEWORK_ENDPOINTS } from './helpers.mjs';
 
 // Well-known crawler and assistant names. A log can't verify them, but real crawlers don't probe:
 // a probe under one of these names is a scanner wearing it (STANDARD.md §2).
@@ -74,11 +74,16 @@ export function probeKind(r) {
 // Families a site might really serve (PHP pages, zip downloads): their counts can include real traffic.
 const MAYBE_REAL = new Set(OTHER_PROBE_FAMILIES.map(([name]) => name).filter((n) => /PHP|backups/.test(n)));
 
+const decodeQuery = (q) => { try { return decodeURIComponent(q ?? ''); } catch { return q ?? ''; } };
 const statusClass = (s) => (s ? `${String(s)[0]}xx` : 'unknown');
 const share = (n, of) => (of ? Math.round((n / of) * 1000) / 10 : 0);
 
-/** Tally lines one at a time; result() gives the report. Addresses are counted, never kept in the report. */
-export function logTally() {
+/**
+ * Tally lines one at a time; result() gives the report. Addresses are counted, never kept in the report.
+ * tags: the strings the site's prank links carry in their query (--tag), whatever format the site chose;
+ * a request whose query contains one counts as a prank link followed.
+ */
+export function logTally({ tags: wanted = [] } = {}) {
   let lines = 0, parsed = 0, notFound = 0, probeTotal = 0, otherMisses = 0, noUa = 0, disguised = 0;
   const disguises = new Map(); // claimed crawler name -> probes sent under it
   const statuses = new Map(); // class -> count, all traffic
@@ -96,8 +101,8 @@ export function logTally() {
       statuses.set(statusClass(r.status), (statuses.get(statusClass(r.status)) ?? 0) + 1);
       if (r.status === 404) notFound++;
       if (!r.ua || r.ua === '-') noUa++;
-      const tag = r.query?.match(SCANNER_TAG)?.[0]?.slice(1);
-      if (tag) tags.set(tag, (tags.get(tag) ?? 0) + 1);
+      const query = decodeQuery(r.query);
+      for (const t of wanted) if (query.includes(t)) tags.set(t, (tags.get(t) ?? 0) + 1);
       const kind = probeKind(r);
       if (r.addr) {
         if (!perAddr.has(r.addr)) perAddr.set(r.addr, { requests: 0, probes: 0, misses: 0, paths: new Set(), noUa: 0 });
@@ -142,7 +147,7 @@ export function logTally() {
         scanner_addresses: { count: scanners.length, requests: scanners.reduce((n, a) => n + a.requests, 0) },
         kinds: [...kinds].map(([kind, k]) => ({ kind, requests: k.requests, may_include_real_traffic: MAYBE_REAL.has(kind), statuses: sorted(k.statuses), families: sorted(k.families) })).sort((a, b) => b.requests - a.requests),
         succeeded_or_crashed: [...hits].map(([key, n]) => ({ request: key, count: n })).sort((a, b) => b.count - a.count),
-        prank_links_followed: sorted(tags),
+        prank_links_followed: wanted.length ? Object.fromEntries(wanted.map((t) => [t, tags.get(t) ?? 0])) : null,
         probes_under_crawler_names: { requests: disguised, names: sorted(disguises) },
       };
     },
@@ -175,8 +180,8 @@ export function formatLogs(rep) {
   } else out.push('Every probe got something other than a 2xx or a 5xx.');
   const d = rep.probes_under_crawler_names;
   if (d.requests) out.push('', `Probes sent under a well-known crawler's name: ${d.requests} (${Object.entries(d.names).slice(0, 8).map(([n, c]) => `${n} ${c}`).join(', ')}${Object.keys(d.names).length > 8 ? ', ...' : ''}). Real crawlers don't probe: these are scanners wearing the name. Answer the behavior, not the name (X3).`);
-  const followed = Object.entries(rep.prank_links_followed);
-  if (followed.length) out.push('', 'Prank links followed (C1, T2):', ...followed.map(([t, n]) => `  ${String(n).padStart(6)}  ${t}`));
+  if (rep.prank_links_followed) out.push('', 'Prank links followed (C1, T2):', ...Object.entries(rep.prank_links_followed).map(([t, n]) => `  ${String(n).padStart(6)}  ${t}`));
+  else out.push('', 'To count visits through the prank\'s links, pass the tags they carry: --tag <text> (repeat for each).');
   out.push('', 'Run it on a day of logs before you ship and again after: scanner 5xx should drop to zero, and every probe should stay a failure (STANDARD.md, T2).');
   return out;
 }

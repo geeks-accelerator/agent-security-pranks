@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+The standard sets rules, not values: the prank's wording, variable names, header names, link tags and page names are each project's own.
+
+- **Tagged links in any format.** C1 counts a link with any query string in the prank's body or headers as tagged; 1.1.x only recognized `ref`, `source` or `utm_source` set to `scanner...`. `--logs` counts follows only for the tags you pass with the new `--tag <text>` (repeat for each), and assumes none otherwise.
+- **STANDARD.md, recipes and adopting.md** replace the example header name, header line and tags with placeholders, and say plainly that examples are illustrations: match the rules, not the examples.
+
 ## 1.1.3 (2026-10-23)
 
 From a review of `docs/adopting.md` (PR #1), each fix checked against our own sites.

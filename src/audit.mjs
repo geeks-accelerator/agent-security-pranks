@@ -8,7 +8,7 @@
 // PUT to / that create nothing. It never follows a redirect off the site. Node 22, 24 or 26 at its security release, no dependencies.
 
 import { request, TIMEOUT_MS } from './http.mjs';
-import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, SCANNER_TAG, agentHeaders } from './helpers.mjs';
+import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, taggedLinks, agentHeaders } from './helpers.mjs';
 
 export const VERSION = '1.1.3';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
@@ -290,7 +290,7 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     const kinds = new Set(pranked.filter((x) => x.path !== echoPath).map(({ path: p, r }) => withoutPath(r.text, p))).size;
     const api = byApi.filter((x) => x.path !== echoPath).map(({ path: p, r }) => `${shown(p)} (${r.status} ${ct(r)})`);
     const edgeAndApi = edge + (api.length ? `; ${api.join(', ')} answered by the site's API` : '');
-    const tagged = pranked.some(({ r }) => SCANNER_TAG.test(r.text)) ? ', with a tagged link to count follow-through' : '';
+    const tagged = pranked.some(({ r }) => taggedLinks([r.text, ...agentHeaders(r.headers).map(([, v]) => v)].join('\n')).length) ? ', with a tagged link to count follow-through' : '';
     if (!prank) miss(id, name, level, `the probes get the site's ordinary 404 page${edgeAndApi}. That's safe; a prank is optional (see the menu)`);
     else if (plain.length) warn(id, name, level, `${got} of ${counted.length} probes that reached the site get a prank; no prank on ${plain.join(', ')}${edgeAndApi}`);
     else pass(id, name, level, `${got} of ${counted.length} probes that reached the site get a prank (${pranked[0].r.status} ${ct(pranked[0].r)}${kinds > 1 ? `, ${kinds} different replies` : ''}${tagged})${edgeAndApi}`);
