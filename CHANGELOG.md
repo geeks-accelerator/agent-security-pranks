@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+From a second review, each scorecard fix reproduced on a fixture site before it was made. No check newly fails a site; two stop failing safe sites wrongly, so a patch release.
+
+**Looser (fewer false failures):**
+- **A 404 page that differs on every request isn't graded as a prank.** The scorecard counted a probe as pranked when its answer differed from the ordinary 404, and a 404 with a request ID, nonce or timestamp (Vercel's default 404 carries an ID) differs every time. A site with no prank then failed P3 and P4. It now fetches two missing pages; when they differ, only an env-shaped answer, or one whose status or content type differs from the ordinary 404, counts as a prank.
+- **P5 grades the prank, not every 404 that echoes the path.** Express's default 404 (`Cannot GET <path>`, escaped) failed P5 for the length cap, on a site with no prank. An ordinary 404 now fails P5 only for an HTML tag from the path coming back unescaped, which is a hole whatever the prank.
+- New fixtures: `stamped` (a 404 with a request ID), `express` (Express's default 404) and `reflect` (an ordinary 404 that reflects the path unescaped). The audit sends one more request, a second missing page.
+
+**Docs:**
+- **adopting.md** asks the owner whether the site welcomes every agent before changing any bot setting, and which inbox `security.txt` should name, never guessing one. It lists every kind of address `--base` treats as local.
+- **examples/github-action.yml** installs the latest Node of its line (`check-latest`), since a runner's cached Node can sit below the security release the CLI requires.
+- **recipes.md:** the Next.js recipe says the function must be named `middleware` on Next 15 (it exported `proxy`, which Next 15 never runs), and `replyFor` honors the real-content exemption, as `isProbe` already did.
+- **The playbook copy** follows the standard: a cache of a day or less is allowed (P3), and `OPTIONS` isn't refused when anything relies on CORS preflight.
+- **STANDARD.md:** the impersonator's 308k requests and its 39% of probes are no longer run together (173k of the 308k were probes); the logs were about 16 hours, from prerendered sites; the Cloudflare AI bot group names are marked as secondary reports; the request counts include the sitemap pages; three claims with no source are reworded or dropped ("flagged by security vendors", "within hours", and how many tools log headers), and the runtime lag now cites the measured case.
+
 ## 1.1.4 (2026-10-23)
 
 The standard sets rules, not values: the prank's wording, variable names, header names, link tags and page names are each project's own.

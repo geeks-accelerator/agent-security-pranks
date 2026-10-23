@@ -26,9 +26,11 @@ Simpler than tightening the regex: list the prefixes your real content and API l
 // [project]: every prefix real pages, the API and the MCP endpoint live under.
 const REAL_PREFIXES = ["/api/", "/docs/", "/mcp", "/[content]/"];
 
+const isRealPath = (p) => REAL_PREFIXES.some((prefix) => p === prefix.replace(/\/$/, "") || p.startsWith(prefix));
+
 function isProbe(pathname) {
   const p = decodedPath(pathname);
-  if (REAL_PREFIXES.some((prefix) => p === prefix.replace(/\/$/, "") || p.startsWith(prefix))) return false;
+  if (isRealPath(p)) return false;
   return SECRET_PROBE.test(p);
 }
 ```
@@ -84,6 +86,7 @@ const REPLIES = [
 
 function replyFor(pathname) {
   const p = decodedPath(pathname);
+  if (isRealPath(p)) return null; // real content first: "Ugly.php" keeps its page
   return REPLIES.find(([re]) => re.test(p))?.[2] ?? null; // null: not a probe, serve the normal 404
 }
 ```
@@ -97,7 +100,8 @@ Only add families your site really doesn't serve: a site that runs PHP leaves `.
 ## Next.js (proxy or middleware) (H1, H2, P1, P3, P4)
 
 ```ts
-// src/proxy.ts (Next 16) or src/middleware.ts (Next 15 and earlier)
+// src/proxy.ts (Next 16). On Next 15 and earlier, name the file src/middleware.ts and the
+// function middleware: Next 15 runs only a function by that name (or a default export).
 import { NextResponse, type NextRequest } from "next/server";
 
 const READ_METHODS = new Set(["GET", "HEAD"]);
@@ -225,7 +229,7 @@ and not starts_with(http.request.uri.path, "/[your-content-prefix]/")
 ### Settings that keep agents welcome
 
 - **Bot Fight Mode: off** on any site that welcomes agents. On the Free plan no rule can skip it, so it challenges scripts, headless browsers and MCP clients too.
-- **AI Crawl Control: check the AI bot settings.** They group AI bots as Search, Agent and Training, and the defaults can block some, for example agents on pages with ads. Set each to Allow if you welcome them.
+- **AI Crawl Control: check the AI bot settings.** They group AI bots (secondary reports describe Search, Agent and Training) and the defaults can block some; read the names and defaults in your own dashboard. Set each group to Allow if you welcome them.
 - **No rule that challenges crawler names or "unverified" traffic.** It catches assistants fetching for a person and every crawler not yet on a verified list (X3).
 - **Rate limiting:** the Free plan's single rule counts by address over 10 seconds, so it catches bursts, not a scanner sending a few requests a second all night. Leave it for a real abuse case.
 

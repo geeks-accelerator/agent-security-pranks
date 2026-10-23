@@ -16,6 +16,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
+          # A runner's cached Node can sit below the line's security release, which the CLI
+          # refuses (exit 2); install the latest release of the line instead.
+          check-latest: true
       - name: Score every site
         run: npx --yes security-pranks-audit@1 --matrix $(cat sites.txt) > security-pranks-status.md
       - name: Keep the status page

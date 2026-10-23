@@ -91,7 +91,7 @@ footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--r
 </header>
 
 <h2>What is knocking</h2>
-<p>We measured one day of HTTP logs on a network of eleven small static sites. Most requests had nothing to do with readers.</p>
+<p>We measured about 16 hours of HTTP logs on a network of eleven small prerendered sites. Most requests had nothing to do with readers.</p>
 <div class="stats">
   <div class="stat"><b>~64%</b><span>of requests were 404s, nearly all of them probes</span></div>
   <div class="stat"><b>1,806</b><span>requests for secrets in 16 hours</span></div>
@@ -105,15 +105,15 @@ footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--r
 <ul class="rules">
   <li><span><strong>Refuse methods you do not use.</strong> A read-only site answers anything but <code>GET</code> and <code>HEAD</code> with <code>405</code> and <code>Allow: GET, HEAD</code>. On our sites this turned framework 500s with stack traces in the log into clean refusals.</span></li>
   <li><span><strong>Refuse framework endpoints you do not use.</strong> Next.js serves its image optimizer at <code>/_next/image</code> even if no page uses it, and that endpoint carried a critical remote-code-execution advisory in 2026. Return <code>404</code> for it.</span></li>
-  <li><span><strong>Pin your runtime and patch it.</strong> If nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release by days.</span></li>
+  <li><span><strong>Pin your runtime and patch it.</strong> If nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release: on 2026-10-22, Railway's builder still chose Node 24.21.0 the day after 24.22.1 shipped.</span></li>
 </ul>
 
 <h2>The ground rules</h2>
 <p>A prank on a public domain speaks in your name. These keep it a joke.</p>
 <ul class="rules">
-  <li><span><strong>Keep the status a failure.</strong> Serve the joke with <code>404</code>, never <code>200</code>. Scanners score by status code. A <code>200</code> on <code>/.env</code> marks you as "found something" on shared target lists, brings more traffic, and can get the domain flagged by security vendors.</span></li>
+  <li><span><strong>Keep the status a failure.</strong> Serve the joke with <code>404</code>, never <code>200</code>. Scanners score by status code. A <code>200</code> on <code>/.env</code> marks you as "found something" on shared target lists, and brings more traffic.</span></li>
   <li><span><strong>Never make anything look like a real credential.</strong> No strings shaped like API keys, tokens or connection URLs. Anything a scanner's regex would extract as a secret is a false alarm for someone else to chase.</span></li>
-  <li><span><strong>Never cache or index it.</strong> Send <code>Cache-Control: no-store</code> and <code>X-Robots-Tag: noindex</code>, and keep it out of the sitemap.</span></li>
+  <li><span><strong>Never index it, and don't cache it for long.</strong> Send <code>X-Robots-Tag: noindex</code> and <code>Cache-Control: no-store</code> or a cache of a day or less, and keep it out of the sitemap.</span></li>
   <li><span><strong>Serve plain text.</strong> Use <code>Content-Type: text/plain</code> with <code>X-Content-Type-Options: nosniff</code>. If you echo the requested path back, strip it to printable ASCII and cap its length first, because the scanner controls it.</span></li>
   <li><span><strong>Match narrowly and prove it.</strong> Run your pattern over every real route you serve and require zero matches. Then run it over your logs to see what it catches.</span></li>
   <li><span><strong>If the joke states facts, quote them.</strong> Ours lists real public meetings. A test fails if any quoted time or place does not appear word for word in the published source.</span></li>
@@ -183,7 +183,8 @@ function decodedPath(pathname) {
 <p>The last alternative matches any filename containing "credential", "secret" or "keys" with a file extension. It is safe only if your real pages never end in an extension. Check that against your own routes before using it.</p>
 
 <h3>Next.js (proxy or middleware)</h3>
-<pre><code><span class="c">// src/proxy.ts (Next 16) or src/middleware.ts (Next 15 and earlier)</span>
+<pre><code><span class="c">// src/proxy.ts (Next 16). On Next 15 and earlier, name the file src/middleware.ts and the
+// function middleware: Next 15 runs only a function by that name (or a default export).</span>
 import { NextResponse, type NextRequest } from "next/server";
 
 const READ_METHODS = new Set(["GET", "HEAD"]);
@@ -271,7 +272,7 @@ server {
     <tr><td><code>GET /.env</code>, <code>/.git/config</code>, <code>/.ssh/id_rsa</code>, <code>/@fs/..%2f.env</code></td><td>404, no-store, noindex, text/plain, prank body</td><td>The routing breaking silently</td></tr>
     <tr><td><code>GET /some-missing-page</code></td><td>Your normal 404, no prank body</td><td>Readers seeing the joke</td></tr>
     <tr><td>Every real route</td><td>Zero pattern matches</td><td>A pattern that is too broad</td></tr>
-    <tr><td><code>POST /</code>, <code>PUT</code>, <code>OPTIONS</code></td><td>405 with <code>Allow: GET, HEAD</code></td><td>The method guard</td></tr>
+    <tr><td><code>POST /</code>, <code>PUT /</code></td><td>405 with <code>Allow: GET, HEAD</code> (leave <code>OPTIONS</code> alone if anything relies on CORS preflight)</td><td>The method guard</td></tr>
     <tr><td><code>HEAD /</code>, <code>GET /</code></td><td>200</td><td>A guard that refuses too much</td></tr>
     <tr><td>Unused framework endpoint</td><td>404</td><td>The endpoint coming back</td></tr>
   </tbody>

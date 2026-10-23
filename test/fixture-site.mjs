@@ -30,11 +30,19 @@
 // secret-named keys with one-word values (P2 warns), a week-long cache (P3 warns), and an order
 // to POST to the API, and a link to a security.txt that isn't there (C2 warns). Nothing fails.
 //
+// Two more sites with no prank, each safe, each with a 404 page an older scorecard misread:
+// the stamped site's 404 carries a per-request ID (as Vercel's default 404 does), so no two 404s
+// are byte-identical; the express site's 404 is Express's default, "Cannot GET <path>", which
+// echoes the whole path, HTML-escaped. Every required check passes on both; C1 warns. The reflect
+// site has no prank either, but its 404 echoes the decoded path unescaped into HTML, which is a
+// hole whatever the prank: P5 fails.
+//
 // The alias site redirects every request to another host: nothing of its own to score.
 // The blocked site's CDN answers the audit's homepage request with a block page.
 //
 // Each request is logged in combined format, for --logs.
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 
 // Built at run time, so this repo holds no string a secret scanner would flag.
 export const FAKE_KEY = ['AK', 'IA', 'Z'.repeat(16)].join('');
@@ -126,10 +134,32 @@ function staticSite(req, res, path) {
   return res.writeHead(404, { 'content-type': 'text/html' }).end('<!doctype html><html><head><title>Not found</title></head><body><h1>Not found</h1></body></html>');
 }
 
+// No prank; its 404 carries a request ID, different every time, like Vercel's NOT_FOUND page.
+function stamped(req, res, path) {
+  if (!['GET', 'HEAD'].includes(req.method)) return res.writeHead(405, { allow: 'GET, HEAD', 'content-type': 'text/plain' }).end('Read-only.\n');
+  if (path === '/') return res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><html><head><title>Stamped</title></head><body><h1>Stamped</h1></body></html>');
+  return res.writeHead(404, { 'content-type': 'text/html' }).end(`<!doctype html><html><head><title>404: NOT_FOUND</title></head><body><h1>404: NOT_FOUND</h1><p>Code: NOT_FOUND</p><p>ID: iad1::${randomUUID()}</p></body></html>`);
+}
+
+// No prank; Express's default 404 (finalhandler): the method and the whole path, HTML-escaped.
+const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function express(req, res, path) {
+  if (!['GET', 'HEAD'].includes(req.method)) return res.writeHead(405, { allow: 'GET, HEAD', 'content-type': 'text/plain' }).end('Read-only.\n');
+  if (path === '/') return res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><html><head><title>Express</title></head><body><h1>Express</h1></body></html>');
+  return res.writeHead(404, { 'content-type': 'text/html; charset=utf-8', 'x-content-type-options': 'nosniff' }).end(`<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot ${req.method} ${escapeHtml(req.url)}</pre>\n</body>\n</html>\n`);
+}
+
+// No prank; its 404 echoes the decoded path into HTML unescaped.
+function reflect(req, res, path) {
+  if (!['GET', 'HEAD'].includes(req.method)) return res.writeHead(405, { allow: 'GET, HEAD', 'content-type': 'text/plain' }).end('Read-only.\n');
+  if (path === '/') return res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><html><head><title>Reflect</title></head><body><h1>Reflect</h1></body></html>');
+  return res.writeHead(404, { 'content-type': 'text/html' }).end(`<!doctype html><html><head><title>Not found</title></head><body><p>No page at ${decodeURIComponent(path)}</p></body></html>`);
+}
+
 const alias = (req, res, path) => res.writeHead(301, { location: `https://elsewhere.example${path}` }).end();
 const blocked = (req, res) => res.writeHead(403, { server: 'cloudflare', 'content-type': 'text/html' }).end('<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>');
 
-const HANDLERS = { good, broken, api, cheeky, static: staticSite, alias, blocked };
+const HANDLERS = { good, broken, api, cheeky, static: staticSite, stamped, express, reflect, alias, blocked };
 
 /** Start one fixture site. Returns { base, domain, log, hosts, close }. */
 export async function startFixture({ kind = 'good', domain = `${kind}.example` } = {}) {
