@@ -6,7 +6,7 @@
 **Last verified:** 2026-10-23
 
 > **Start here**
-> 1. Read a day of your request logs: `npx security-pranks-audit --logs <access-log>`. Count the probes, and any that got a 2xx or a 5xx.
+> 1. Read a day of your request logs: `npx security-pranks-audit --logs <access-log>`. Count the probes, and any that got a 2xx or a 5xx. No access log? On Cloudflare, save an analytics query instead ([docs/recipes.md](docs/recipes.md)).
 > 2. Score your site: `npx security-pranks-audit <domain>`. It needs Node 22.23.4, 24.22.1 or 26.12.1, or later on the same line (each supported line's current security release), and no dependencies. Run it only against sites you run.
 > 3. Fix required failures first. Each line the scorecard prints names an ID and the reason.
 > 4. A prank is optional (C1). The hardening (H) and the rules (P, X) are what keep the site safe; the joke is a garnish.
@@ -90,6 +90,23 @@ What it adds:
 - **The biggest scanner wore AI-crawler names.** It rotated through about twenty (GPTBot, ClaudeBot, DeepSeekBot, GrokBot, KimiBot and more), each almost exactly 12,000 times, 308k requests in all and 39% of the week's probes, hunting `.env` files in AI-app folders (`/agents/.env`, `/chatbot/.env`) and dev-server file reads (`/@fs/`, `/__vite_rsc_findSourceMapURL`). A name says nothing about who's asking (principle 8). `--logs` counts probes sent under well-known crawler names.
 - **The smaller the site, the bigger the share of probes.** Scanners find new domains from public certificate logs within hours.
 - **A few machines send most of it.** Ten addresses sent 43% of the week's probes. None got a 2xx.
+
+A week at drifts.bot, an agent platform with an API under `/api/` and an MCP server, on Cloudflare's Free plan (7 days to 2026-10-23, Cloudflare's GraphQL analytics grouped by path and status, sampled and capped at the top 2,000 groups, so the probe counts are a lower bound). The site had no request log to export: its Cloudflare zone offered no HTTP request log export on the Free plan, and its host's logs cover only what reaches the app.
+
+| Measure | Value |
+|---|---|
+| Requests | about 36,000 |
+| Probes for secret files, WordPress and PHP, and config and backup files | about 6,000 (about 17%) |
+| `.env` in its variations | about 3,560 |
+| WordPress and PHP paths | about 1,350 |
+| Other config and backup files | about 500 |
+| Cloud credentials (`/.aws/`, and the like) | about 340 |
+| `.git` | about 280 |
+| Probes that got a 2xx | 0 |
+
+What it adds:
+
+- **A site with no log export can still count.** The analytics query is how this site got its before numbers (T2); [docs/recipes.md](docs/recipes.md) has it, with its limits, and `--logs` reads the saved answer.
 
 Re-measure with `--logs` and add dated results here when a site's numbers change what an item should say.
 
@@ -220,6 +237,8 @@ Strip the path to printable ASCII and cap its length before you echo it.
 
 Match narrowly, against the URL-decoded, lowercased path, and prove it: run the pattern over every real route you serve and require zero matches. Then run it over your logs to see what it catches. The playbook's pattern matches any filename containing "credential", "secret" or "keys" with a file extension, and any path where `env` is followed by `-`, `.`, `_`, `:` or `/` (so `/meetings/env-council` matches). It's safe only where no real route looks like that.
 
+**Where users choose URLs, exempt those prefixes up front** (recommended). If hosts, users or members pick slugs, usernames or file names that become paths (`/[content]/<slug>`, `/u/<username>`), the route test proves only that today's URLs pass. Why: the next person to name a page `env-setup` or `notes.php` gets the joke with a 404 on their own page, and no test fails, because the test ran before the name existed. At animalhouse, a pet named "Ugly.php" would have lost its page this way. Exempt the prefixes where users name things before any match turns up ([docs/recipes.md](docs/recipes.md)), and keep the route test for the rest.
+
 **Done when:** a test runs the pattern over every route and finds no match (T1).
 
 **Scorecard:** reads up to 10 sitemap pages and fails if any answers with the prank. It warns when a sitemap URL matches the playbook's pattern. It can't see routes the sitemap leaves out; your test can.
@@ -269,6 +288,8 @@ Use canary tokens on purpose, as their own project, not as a prank.
 **Level:** required. **Why:** a name is free to wear. The busiest scanner in §2 rotated through twenty AI-crawler names, while the real, verified crawlers didn't probe at all. A rule that challenges a name, or "unverified" traffic, breaks visitors the site wants: an assistant fetching a page for a person, a new crawler that isn't on anyone's verified list yet, an agent built last week. It barely slows the scanner, which changes its name.
 
 Answer what a request asks for. The guard, the prank and any edge rule you add for this standard match paths and methods only, never the user agent or a verified-bot flag.
+
+**Networks are a different question.** A rule keyed on a network (an ASN, such as a cloud provider's) doesn't depend on a claimed name, so this item doesn't forbid it. Nothing in this standard needs one either: probes are answered by path, for every visitor alike. A network rule challenges every client on that network, and cloud networks are where agents run, so a site that adds one for another reason (load from a page-loading fleet, say) does so outside this standard, and keeps it off the paths agents fetch (§9).
 
 **Done when:** no rule added for this standard matches on user agent, claimed crawler name or verified-bot status. **Checked in review.**
 
@@ -382,7 +403,7 @@ Then score the build: `npx security-pranks-audit@1 <domain> --base http://localh
 
 **Level:** recommended. **Why:** the logs show whether the change did what it should, and catch a probe that started succeeding.
 
-Read a day of request logs before you ship: count 5xx responses, probe paths, and probes that got anything other than a failure. After shipping, the 5xx from scanners should drop to zero, the probes should all still be failures, and nothing your readers use should have changed. `security-pranks-audit --logs <file>` counts them, by probe kind (secret files, actuator and heap dumps, framework logs, backups, WordPress and PHP, unused methods), status and client family. It also reports the busiest address's share of all traffic and how many addresses sent almost nothing but probes, as numbers, and how many requests arrived through the prank's tagged links (C1). It never prints addresses.
+Read a day of request logs before you ship: count 5xx responses, probe paths, and probes that got anything other than a failure. After shipping, the 5xx from scanners should drop to zero, the probes should all still be failures, and nothing your readers use should have changed. `security-pranks-audit --logs <file>` counts them in an exported access log, or in a saved Cloudflare GraphQL Analytics answer for a site with no log export (the recipe and its limits are in [docs/recipes.md](docs/recipes.md)), by probe kind (secret files, actuator and heap dumps, framework logs, backups, WordPress and PHP, unused methods), status and client family. It also reports the busiest address's share of all traffic and how many addresses sent almost nothing but probes, as numbers, and how many requests arrived through the prank's tagged links (C1). It never prints addresses.
 
 **Done when:** a before and an after count are recorded with dates.
 
@@ -395,6 +416,7 @@ Read a day of request logs before you ship: count 5xx responses, probe paths, an
 - **Blocking scanners by address or user agent.** Addresses rotate and user agents lie (§2). Blocking belongs to the CDN or firewall, and it's no substitute for answering probes safely; this standard doesn't require it.
 - **Pranks that test how an AI agent behaves** (hidden instructions to see whether an agent follows them). They score the agent, not the site, so they don't fit a site scorecard. C2 is the part that belongs here: a note that invites and asks nothing harmful.
 - **Challenging crawler names that fail verification.** Cloudflare's Free plan can express it (`not cf.client.bot` with a user-agent match), and it does catch the scanners that wear crawler names. It also challenges real assistants and new crawlers whenever verification misses them, and everything that isn't on a verified list. This standard welcomes them (principle 8, X3), and blocking the probe paths (H4) stops the same scanners without asking anyone who they are.
+- **Rules keyed on a network (ASN).** For probes, a path rule (H4) does the job without asking where anyone comes from. A network rule doesn't trust a claimed name, which is why X3 doesn't cover it, but it challenges every client on that network, and cloud networks are where real agents, MCP clients and link-preview fetchers run: a challenge page breaks any client that isn't a browser. Whether to challenge a network for other reasons, such as load from a page-loading fleet, is the site's and its CDN's call, outside this standard. A site that does it keeps the API, the MCP endpoint and the discovery files (`/.well-known/`, `robots.txt`, `sitemap.xml`, `llms.txt`) out of the rule; drifts.bot's rule (2026-10-19) challenges two cloud networks on page paths only, for that reason.
 - **Bot Fight Mode on a site that welcomes agents.** On the Free plan it can't be skipped, so it challenges agents and scripts along with scanners (H4).
 - **Parked and redirect-only domains.** There's no site to answer with, so nothing here applies. Whatever their owner does with them is outside this standard.
 - **A 200 joke on a static site.** A static site has nothing to leak, but the harm is in how the 200 is read, not in what the site holds (P1): target lists, vendor flags and "your .env is public" reports follow the status code. A 404 carries the same joke.
@@ -466,6 +488,8 @@ Read 2026-10-23.
 - **WHATWG Fetch Standard:** [`X-Content-Type-Options`](https://fetch.spec.whatwg.org/#x-content-type-options-header). (P4)
 - **Next.js:** [Image optimization](https://nextjs.org/docs/app/api-reference/components/image) (the `/_next/image` endpoint) and the project's [security advisories](https://github.com/vercel/next.js/security/advisories). The 2026 advisory for the image optimizer is reported by the playbook; cite it here by its advisory ID when this item is next revised. (H2)
 - **Cloudflare:** [custom rules](https://developers.cloudflare.com/waf/custom-rules/) (Free: 5 rules, no regex), [rate limiting rules](https://developers.cloudflare.com/waf/rate-limiting-rules/) (Free: 1 rule, IP counting, 10-second period), [security features interoperability](https://developers.cloudflare.com/waf/feature-interoperability) (Bot Fight Mode can't be skipped by custom rules), [fields reference](https://developers.cloudflare.com/ruleset-engine/rules-language/fields/reference/) (`cf.client.bot`). The AI Crawl Control defaults (Search, Agent and Training groups, agents blocked on pages with ads for new domains from 2026-09-15) are from secondary reports; check your zone. (H4, X3)
+- **Cloudflare GraphQL Analytics API:** [API token authentication](https://developers.cloudflare.com/analytics/graphql-api/getting-started/authentication/api-token-auth/) (Account Analytics, Read), [client headers](https://developers.cloudflare.com/analytics/graphql-api/getting-started/authentication/graphql-client-headers/) (the endpoint), [filtering](https://developers.cloudflare.com/analytics/graphql-api/features/filtering/) (`like` with `%`, explicit `OR`), [settings](https://developers.cloudflare.com/analytics/graphql-api/features/discovery/settings/) (`maxDuration`, `notOlderThan`, `maxPageSize` per dataset), [limits](https://developers.cloudflare.com/analytics/graphql-api/limits/) and [sampling](https://developers.cloudflare.com/analytics/graphql-api/sampling/) (adaptive datasets return estimates scaled from a sample). The `ip.src.asnum` field for network rules is in the [fields reference](https://developers.cloudflare.com/ruleset-engine/rules-language/fields/reference/ip.src.asnum/). (T2, X3)
+- **drifts.bot's analytics:** 7 days to 2026-10-23, `httpRequestsAdaptiveGroups` grouped by `clientRequestPath` and `edgeResponseStatus`, sampled and capped at the top 2,000 groups, counted by the project's own agent: the fourth table in §2. On that Free plan zone, `firewallEventsAdaptiveGroups` answered "does not have access to the path". Its network rule (a Managed Challenge for two cloud networks on page paths only, deployed 2026-10-19) is the example in §9.
 - **[Bots in AI clothing](docs/research/bots-in-ai-clothing.md):** one owner's week of Cloudflare analytics, October 16 to 23, 2026 (revised the same day: probes counted on the full set with 21 path patterns): the third table in §2 and the crawler-name impersonation.
 - **Sysdig Threat Research,** [an LLM agent in a Marimo intrusion](https://sysdig.com/blog/ai-agent-at-the-wheel-how-an-attacker-used-llms-to-move-from-a-cve-to-an-internal-database-in-4-pivots) (2026-05-26): 12 cloud API calls spread across 11 Cloudflare Workers addresses in 22 seconds. Why per-address rules and names are weak signals (X3).
 - **animalhouse.ai's logs:** 24 hours to 2026-10-23, counted by the project's own agent: the second table in §2, the probe families beyond secret files, and the first draft of per-family replies that led to the P2 name rule and the C2 invitation rule.

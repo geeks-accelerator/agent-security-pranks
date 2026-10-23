@@ -13,7 +13,7 @@ npx security-pranks-audit example.com
 ```
 
 ```
-Agent security pranks: upstateny.news  (security-pranks-audit v1.1.0)
+Agent security pranks: upstateny.news  (security-pranks-audit v1.2.0)
 Probed https://upstateny.news. Prank found: yes. Framework: Next.js.
 
 Required
@@ -77,7 +77,7 @@ security-pranks-audit --logs <access-log> [--json]
 | `--base url` | score a local or preview build as the domain before you deploy (`--base http://localhost:3000`) |
 | `--compare file` | list what changed since a previous run: a status page from `--matrix` or a saved `--json` report |
 | `--matrix` | score several sites, three at a time, and print one markdown status page |
-| `--logs file` | count probes in an exported access log (combined log format, or JSON lines from Cloudflare, Vercel or Railway): secret files, dev-server file reads, actuator and heap dumps, framework logs, backups, WordPress and PHP, infrastructure endpoints, unused methods. By kind, status and client family, with the busiest address's share of traffic, probes sent under well-known crawler names, any probe that got a 2xx or a 5xx, and the prank's tagged links that came back. It prints counts, never addresses |
+| `--logs file` | count probes in an exported access log (combined log format, or JSON lines from Cloudflare, Vercel or Railway), or in a saved Cloudflare GraphQL Analytics answer for a site with no log export ([recipe](docs/recipes.md#logs-without-a-log-export-cloudflares-analytics-t2)), each row weighted by its count: secret files, dev-server file reads, actuator and heap dumps, framework logs, backups, WordPress and PHP, infrastructure endpoints, unused methods. By kind, status and client family, with the busiest address's share of traffic, probes sent under well-known crawler names, any probe that got a 2xx or a 5xx, and the prank's tagged links that came back. It prints counts, never addresses |
 
 From a clone, run `node bin/security-pranks-audit.mjs example.com`.
 

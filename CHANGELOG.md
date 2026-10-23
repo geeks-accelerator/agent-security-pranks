@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0 (2026-10-23)
+
+From adopting the standard on drifts.bot, an agent platform with an API on Cloudflare's Free plan, whose zone had no request log to export. No check changes, so no score changes.
+
+**New:**
+- **`--logs` reads a saved Cloudflare GraphQL Analytics answer** (`httpRequestsAdaptiveGroups` rows of `count` and `dimensions`), as well as access logs. Each row counts as `count` requests. It finds the rows wherever they sit, so one response, several zones, or several days saved as one array (`jq -s`) all work. A dimension the query left out is reported as missing, not as empty: no user agents means "User agent not in the data", not "No user agent", and no addresses means no per-address counts. The report says the counts are sampled and cover only the query's top rows. An answer with errors and no rows (a dataset the plan can't query) exits 2 with the errors, instead of reporting zero probes. The JSON report adds `source`, `groups`, `user_agent_not_in_data` and `addresses_in_data`.
+- **docs/recipes.md: logs without a log export.** The query, how to find your plan's limits for it (`maxDuration`, `notOlderThan`, `maxPageSize`), a probe-path filter so rare probes aren't pushed out of the row limit, and the limits: sampled, top rows only, short retention.
+- **Where users choose URLs, exempt those prefixes up front** (P6, adopting steps 2 and 5, recipes). The route test proves only that today's slugs and usernames pass; the next user's `env-setup` or `notes.php` would get the joke. Guidance, not a new check.
+- **Network (ASN) rules, placed.** X3 says a rule keyed on a network isn't a claimed name, so X3 doesn't cover it, and §9 says why this standard doesn't use one (a path rule stops probes for everyone alike, while a network rule challenges every agent hosted there) and that one added for other reasons is the site's and CDN's call, kept off the API, MCP and discovery paths. The Cloudflare recipe and adopting step 9 say the same.
+- **STANDARD.md §2:** a week of drifts.bot's analytics: about 6,000 probes in about 36,000 requests, none answered with a 2xx.
+
 ## 1.1.3 (2026-10-23)
 
 From a review of `docs/adopting.md` (PR #1), each fix checked against our own sites.

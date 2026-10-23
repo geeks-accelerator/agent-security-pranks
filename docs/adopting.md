@@ -12,6 +12,7 @@ Everything below is for that agent. The lessons at the end come from the sites t
    - Exit code 0 means every required check passed, and 1 means at least one failed: read each failing line and its reason. Exit code 2 means it didn't score anything (an unsupported Node version, a bad flag or an unreadable file): fix what the message names and run it again, and don't record a score from it.
    - If a probe gets a 200 or a 5xx (P1), fix that before anything else.
    - If the owner can export a day of request logs (from the host or CDN: combined log format, or JSON lines from Cloudflare, Vercel or Railway), run `npx security-pranks-audit@1 --logs <file>` too. Those are the before numbers (T2). It prints counts only; never paste addresses anywhere. Don't wait for logs to start.
+   - No log export (a CDN plan without request log export, or a host that logs only some routes)? On Cloudflare, save the GraphQL Analytics query from [recipes.md](recipes.md#logs-without-a-log-export-cloudflares-analytics-t2) to a file and give that to `--logs`. It needs an API token with read access to analytics, which the owner creates. Its counts are sampled and cover only the top rows, so record them as estimates, with the query's window.
 
 2. **Find where the guard goes.** It has to run before the framework and before any static file, on every path:
    - **Next.js:** `src/proxy.ts` (Next 16) or `src/middleware.ts` (Next 15 and earlier). Don't exclude `_next/image` from the matcher.
@@ -19,6 +20,7 @@ Everything below is for that agent. The lessons at the end come from the sites t
    - **nginx:** a `location` block, with `always` on every `add_header`.
    - **A static site on a host or CDN:** the host's edge middleware or functions (a Cloudflare Worker or Pages Function, Vercel Routing Middleware, Netlify Edge Functions). A rewrite to a static file usually can't set a 404 status and the headers, so check what the host supports.
    - **A site with an API:** exempt the API's prefix (and any MCP endpoint) from the prank. A probe there gets the API's own JSON 404 or 401, which is fine, and the scorecard counts it as the API answering.
+   - **A site where users choose URLs** (slugs, usernames, uploaded file names under a prefix such as `/u/` or `/[content]/`): exempt those prefixes too, now. The route test only covers the URLs that exist today, and the next user to pick a name like `env-setup` or `notes.php` would get the prank on their own page (P6).
 
    Code for the first three is in [recipes.md](recipes.md). If the owner runs several sites, put the pattern and the prank helper in one shared module or package, so a fix reaches all of them.
 
@@ -38,7 +40,7 @@ Everything below is for that agent. The lessons at the end come from the sites t
    - End the note with a link to `/.well-known/security.txt`, and serve that file if the site doesn't yet: a real inbox and an `Expires` under a year ahead ([recipes.md](recipes.md)). The joke is for scanners; a real researcher needs a way to report.
    - A prank is optional. If the owner doesn't want one, skip this step, record C1 as declined with the reason, and do the rest: the hardening and the rules are what keep the site safe.
 
-5. **Add the guard** behind the probe pattern: status 404, `X-Robots-Tag: noindex`, `Content-Type: text/plain`, `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store` or a cache of a day or less (P1, P3, P4). If you echo the path, strip it to printable ASCII and cap its length (P5). Every other missing page keeps the normal 404 (P8). Run the pattern over every real route first, and narrow it if anything matches (P6).
+5. **Add the guard** behind the probe pattern: status 404, `X-Robots-Tag: noindex`, `Content-Type: text/plain`, `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store` or a cache of a day or less (P1, P3, P4). If you echo the path, strip it to printable ASCII and cap its length (P5). Every other missing page keeps the normal 404 (P8). Run the pattern over every real route first, and narrow it if anything matches (P6). Prefixes where users choose the path stay exempt even when every current route passes.
 
 6. **Add the guard tests (T1)** from [recipes.md](recipes.md): probes, an ordinary missing page, methods, the framework endpoint, every real route against the pattern, and quoted facts. Run them against the built server, and watch each fail once with the guard turned off.
 
@@ -49,11 +51,11 @@ Everything below is for that agent. The lessons at the end come from the sites t
 
 8. **Verify locally:** build and test, then score the local build: `npx security-pranks-audit@1 <your-domain> --base http://localhost:<port>`. On a local address it names your domain as the Host, so a server that runs several sites answers as the one being scored.
 
-9. **If the site is behind Cloudflare or another CDN (H4),** check that its bot settings match the site's welcome: Bot Fight Mode off, and the AI bot settings (Search, Agent, Training) set to Allow if the site welcomes them. Optionally propose the edge rule from [recipes.md](recipes.md) for probe families the prank doesn't answer, tested against the sitemap first.
+9. **If the site is behind Cloudflare or another CDN (H4),** check that its bot settings match the site's welcome: Bot Fight Mode off, and the AI bot settings (Search, Agent, Training) set to Allow if the site welcomes them. Optionally propose the edge rule from [recipes.md](recipes.md) for probe families the prank doesn't answer, tested against the sitemap first. If the zone already has a rule keyed on a network (ASN), leave it alone: it's outside this standard (STANDARD.md §9). Check only that it doesn't cover the API, the MCP endpoint or the discovery files, and tell the owner if it does.
 
 10. **Ask the owner, then deploy.** Get the owner's OK before deploying, and before changing CDN, firewall or DNS settings: each is live for every visitor at once. After the deploy, run `npx security-pranks-audit@1 <your-domain> --compare docs/security-pranks-status.md` against production to see what changed, regenerate the status page, and commit. Compare item by item, not just the totals: adding a prank makes P3, P4 and C2 apply.
 
-11. **A day after the deploy,** if you have logs, run `--logs` on a day of them again. Scanner 5xx should be zero, every probe still a failure, and nothing readers use changed.
+11. **A day after the deploy,** if you have logs (or the analytics query), run `--logs` on a day of them again. Scanner 5xx should be zero, every probe still a failure, and nothing readers use changed.
 
 When you're done, report the `--compare` output (what changed), the score before and after, the prank text, the `--logs` numbers before and after if you had logs, and anything you declined.
 

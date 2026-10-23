@@ -35,6 +35,8 @@ function isProbe(pathname) {
 
 A probe under `/api/` then gets the API's own JSON 404 or 401, which is fine (P1), and the scorecard counts it as the API answering, not as a missing prank.
 
+**Where users choose the URL, exempt the prefix up front.** If people pick slugs, usernames or file names that become paths (`/[content]/<slug>`, `/u/<username>`), the route test only proves that today's URLs pass. The next user who names a page `env-setup` or `notes.php` gets the joke with a 404, and nothing fails until a reader finds it. The pet named "Ugly.php" at animalhouse was such a name. List those prefixes in `REAL_PREFIXES` from the start, and keep the route test for everything else.
+
 ## The prank body (C1, C2, P2, P5)
 
 ```js
@@ -200,7 +202,75 @@ and not starts_with(http.request.uri.path, "/[your-content-prefix]/")
 - **Bot Fight Mode: off** on any site that welcomes agents. On the Free plan no rule can skip it, so it challenges scripts, headless browsers and MCP clients too.
 - **AI Crawl Control: check the AI bot settings.** They group AI bots as Search, Agent and Training, and the defaults can block some, for example agents on pages with ads. Set each to Allow if you welcome them.
 - **No rule that challenges crawler names or "unverified" traffic.** It catches assistants fetching for a person and every crawler not yet on a verified list (X3).
+- **Rules keyed on a network (ASN) are outside this standard.** A rule like `ip.src.asnum in {...}` doesn't depend on a claimed name, so a scanner can't talk its way past it the way it can with a user agent. But it challenges everyone on that network, and cloud networks are where agents, MCP clients and link-preview fetchers run; a challenge page breaks any client that isn't a browser. Probes don't need one: the path rule above stops them for every visitor alike. If you add a network rule for another reason, such as load from a page-loading fleet, that's your CDN's call, not this standard's (STANDARD.md §9). Keep it off the paths agents fetch: the API, the MCP endpoint, `/.well-known/`, `robots.txt`, `sitemap.xml`, `llms.txt` and any other discovery file.
 - **Rate limiting:** the Free plan's single rule counts by address over 10 seconds, so it catches bursts, not a scanner sending a few requests a second all night. Leave it for a real abuse case.
+
+## Logs without a log export: Cloudflare's analytics (T2)
+
+Many small sites have no access log to give `--logs`: a CDN may export request logs only on some plans (check your zone's Logpush datasets; drifts.bot's Free plan zone had no HTTP request export on 2026-10-23), and a host may log only some routes, or lose its logs on a redeploy. Cloudflare's GraphQL Analytics API still counts every request at the edge, by path and status. Save its answer to a file and `--logs` reads it: each row stands for its `count` requests.
+
+You need an API token with read access to analytics (Cloudflare's guide uses Account, Account Analytics, Read), and the zone ID from the zone's overview page. Keep the token in an environment variable, never in the repo.
+
+First, ask what your plan allows for this dataset: how long one query may span (`maxDuration`, in seconds), how far back it goes (`notOlderThan`), and how many rows one query returns (`maxPageSize`).
+
+```graphql
+query Limits($zoneTag: string) {
+  viewer {
+    zones(filter: { zoneTag: $zoneTag }) {
+      settings { httpRequestsAdaptiveGroups { enabled maxDuration notOlderThan maxPageSize } }
+    }
+  }
+}
+```
+
+Then count requests by path, method and status. Run it once with no path filter for the totals, and once with the path filter below, so rare probe paths aren't pushed out of the row limit by your real pages. Don't filter by status: a probe that got a 2xx is the one you most need to see.
+
+```graphql
+query Probes($zoneTag: string, $since: Time, $until: Time, $limit: uint64) {
+  viewer {
+    zones(filter: { zoneTag: $zoneTag }) {
+      httpRequestsAdaptiveGroups(
+        limit: $limit
+        orderBy: [count_DESC]
+        filter: {
+          datetime_geq: $since
+          datetime_lt: $until
+          OR: [
+            { clientRequestPath_like: "%.env%" }, { clientRequestPath_like: "%/.git%" },
+            { clientRequestPath_like: "%/.ssh/%" }, { clientRequestPath_like: "%/.aws/%" },
+            { clientRequestPath_like: "%id_rsa%" }, { clientRequestPath_like: "%credential%" },
+            { clientRequestPath_like: "%secret%" }, { clientRequestPath_like: "%.php%" },
+            { clientRequestPath_like: "%/wp-%" }, { clientRequestPath_like: "%actuator%" },
+            { clientRequestPath_like: "%heapdump%" }, { clientRequestPath_like: "%/@fs/%" }
+          ]
+        }
+      ) {
+        count
+        dimensions { clientRequestPath clientRequestHTTPMethodName edgeResponseStatus }
+      }
+    }
+  }
+}
+```
+
+```sh
+# probes.graphql holds the query above. One file per window of maxDuration or less.
+jq -n --rawfile q probes.graphql --arg zone "$CF_ZONE_ID" \
+  '{query: $q, variables: {zoneTag: $zone, since: "2026-10-22T00:00:00Z", until: "2026-10-23T00:00:00Z", limit: 10000}}' |
+curl -s https://api.cloudflare.com/client/v4/graphql \
+  -H "Authorization: Bearer $CF_ANALYTICS_TOKEN" -H "Content-Type: application/json" \
+  --data @- > probes-2026-10-22.json
+
+jq -s . probes-*.json > probes-week.json   # several windows, read as one
+npx security-pranks-audit@1 --logs probes-week.json
+```
+
+- **The path filter only gathers candidates.** `--logs` classifies every row with its own probe families, so a filter that also catches a real page does no harm. Cloudflare's `like` treats `%` as a wildcard, and in practice `_` matches any one character too (`__vite` matched article URLs containing "invite" in [Bots in AI clothing](research/bots-in-ai-clothing.md)). Here that only over-matches, which is harmless.
+- **Counts are estimates.** Adaptive datasets are sampled when traffic is high, and Cloudflare returns counts scaled from the sample, so two runs over the same window can differ slightly.
+- **Only the top rows come back.** A query returns at most `limit` rows, busiest first, so paths past the limit are missing and the totals are a lower bound. If you get exactly `limit` rows, narrow the window or the filter.
+- **No addresses or user agents by default.** Add `userAgent` to `dimensions` to split probes by client family and count crawler-name disguises, at the cost of many more rows. Adding `clientIP` gives per-address counts but multiplies rows again; `--logs` never prints addresses either way.
+- **Retention is short.** Take the before numbers before you deploy: once the window passes `notOlderThan`, it's gone.
+- **Not every dataset is on every plan.** On drifts.bot's Free plan zone (2026-10-23), `firewallEventsAdaptiveGroups` answered "does not have access to the path", while `httpRequestsAdaptiveGroups` worked. When a saved answer has errors and no rows, `--logs` prints the errors and exits 2 rather than reporting zero probes.
 
 ## Guard tests (T1)
 

@@ -1,5 +1,5 @@
-// --logs: count secret-hunting probes in an exported access log, before and after (T2).
-// Pure: the CLI feeds it lines. It prints counts and client families, never addresses.
+// --logs: count secret-hunting probes in an exported access log, or in a saved Cloudflare GraphQL
+// Analytics response, before and after (T2). Pure: the CLI feeds it lines or rows. It prints counts and client families, never addresses.
 
 import { probeFamily, knownProbe, OTHER_PROBE_FAMILIES, FRAMEWORK_ENDPOINTS, SCANNER_TAG } from './helpers.mjs';
 
@@ -57,6 +57,56 @@ export function parseLine(line) {
   return { addr: m[1], method: m[2].toUpperCase(), path: m[3].split('?')[0], query: m[3].includes('?') ? m[3].slice(m[3].indexOf('?')) : '', status: Number(m[4]), ua: m[5] ?? '' };
 }
 
+// Cloudflare GraphQL Analytics (httpRequestsAdaptiveGroups): rows of { count, dimensions }, each one
+// standing for `count` requests. For sites with no access log to export, such as Cloudflare's Free plan
+// (no Logpush). Recipe and limits in docs/recipes.md.
+const GROUP_FIELDS = {
+  path: 'clientRequestPath', query: 'clientRequestQuery', method: 'clientRequestHTTPMethodName',
+  status: 'edgeResponseStatus', ua: 'userAgent', addr: 'clientIP',
+};
+const isGroup = (x) => x && typeof x === 'object' && Number.isFinite(x.count) && x.dimensions && typeof x.dimensions === 'object';
+
+/** One analytics row as { record, count }; record is null when the row has no path. A dimension the
+ *  query left out is null for the user agent (unknown, not empty) and empty for the address. */
+export function parseGroup(row) {
+  const d = row.dimensions;
+  const count = Math.max(0, Math.round(row.count));
+  if (typeof d[GROUP_FIELDS.path] !== 'string') return { record: null, count };
+  const query = typeof d[GROUP_FIELDS.query] === 'string' && d[GROUP_FIELDS.query] ? (d[GROUP_FIELDS.query].startsWith('?') ? d[GROUP_FIELDS.query] : `?${d[GROUP_FIELDS.query]}`) : '';
+  return {
+    count,
+    record: {
+      path: d[GROUP_FIELDS.path].split('?')[0], query,
+      ua: GROUP_FIELDS.ua in d ? String(d[GROUP_FIELDS.ua] ?? '') : null,
+      addr: String(d[GROUP_FIELDS.addr] ?? ''),
+      method: String(d[GROUP_FIELDS.method] ?? 'GET').toUpperCase(),
+      status: Number(d[GROUP_FIELDS.status]) || 0,
+    },
+  };
+}
+
+/** A saved GraphQL Analytics response (or an array of them, one per day or zone) as
+ *  { rows, errors }, or null when the text isn't one. Rows are found wherever they sit
+ *  (data.viewer.zones[].httpRequestsAdaptiveGroups, under an alias, or a bare array). */
+export function analyticsGroups(text) {
+  let doc;
+  try { doc = JSON.parse(text); } catch { return null; }
+  if (!doc || typeof doc !== 'object') return null;
+  const rows = [], errors = [];
+  const walk = (x, depth) => {
+    if (!x || typeof x !== 'object' || depth > 12) return;
+    if (Array.isArray(x)) {
+      if (x.length && x.every(isGroup)) { rows.push(...x); return; }
+      for (const y of x) walk(y, depth + 1);
+      return;
+    }
+    if (Array.isArray(x.errors)) for (const e of x.errors) if (e && typeof e.message === 'string') errors.push(e.message);
+    for (const [k, v] of Object.entries(x)) if (k !== 'errors') walk(v, depth + 1);
+  };
+  walk(doc, 0);
+  return rows.length || errors.length ? { rows, errors } : null;
+}
+
 const FRAMEWORK_PATHS = FRAMEWORK_ENDPOINTS.map((f) => [f.label, f.path.split('?')[0]]);
 
 /** What a request was hunting for, or null for ordinary traffic. */
@@ -77,9 +127,10 @@ const MAYBE_REAL = new Set(OTHER_PROBE_FAMILIES.map(([name]) => name).filter((n)
 const statusClass = (s) => (s ? `${String(s)[0]}xx` : 'unknown');
 const share = (n, of) => (of ? Math.round((n / of) * 1000) / 10 : 0);
 
-/** Tally lines one at a time; result() gives the report. Addresses are counted, never kept in the report. */
+/** Tally log lines (add) or analytics rows (addGroup) one at a time; result() gives the report. Addresses are counted, never kept in the report. */
 export function logTally() {
-  let lines = 0, parsed = 0, notFound = 0, probeTotal = 0, otherMisses = 0, noUa = 0, disguised = 0;
+  let lines = 0, parsed = 0, notFound = 0, probeTotal = 0, otherMisses = 0, noUa = 0, uaUnknown = 0, disguised = 0;
+  let groups = 0, groupsRead = 0; // analytics rows, when fed by addGroup instead of add
   const disguises = new Map(); // claimed crawler name -> probes sent under it
   const statuses = new Map(); // class -> count, all traffic
   const kinds = new Map(); // kind -> { requests, statuses: Map, families: Map }
@@ -87,42 +138,55 @@ export function logTally() {
   const perAddr = new Map(); // addr -> { requests, probes, misses, paths: Set, noUa }
   const hits = new Map(); // "status method path" -> count, for probes that got 2xx or 5xx
   const tags = new Map(); // tag -> count, for prank links followed
+  /** One parsed request, or n identical ones. ua is null when the data has no user agents. */
+  function addRecord(r, n = 1) {
+    parsed += n;
+    const ua = r.ua ?? '';
+    statuses.set(statusClass(r.status), (statuses.get(statusClass(r.status)) ?? 0) + n);
+    if (r.status === 404) notFound += n;
+    if (r.ua === null) uaUnknown += n;
+    else if (!ua || ua === '-') noUa += n;
+    const tag = r.query?.match(SCANNER_TAG)?.[0]?.slice(1);
+    if (tag) tags.set(tag, (tags.get(tag) ?? 0) + n);
+    const kind = probeKind(r);
+    if (r.addr) {
+      if (!perAddr.has(r.addr)) perAddr.set(r.addr, { requests: 0, probes: 0, misses: 0, paths: new Set(), noUa: 0 });
+      const a = perAddr.get(r.addr);
+      a.requests += n;
+      if (kind) a.probes += n;
+      else if (r.status >= 400 && r.status < 500) a.misses += n;
+      if (a.paths.size < 5000) a.paths.add(r.path);
+      if (r.ua !== null && (!ua || ua === '-')) a.noUa += n;
+    }
+    if (!kind) { if (r.status >= 400 && r.status < 500) otherMisses += n; return; }
+    probeTotal += n;
+    if (r.addr) probeAddrs.add(r.addr);
+    const named = ua.match(CRAWLER_NAMES)?.[0] ?? ua.match(SEARCH_NAMES)?.[0];
+    if (named) { disguised += n; disguises.set(named.toLowerCase(), (disguises.get(named.toLowerCase()) ?? 0) + n); }
+    if (!kinds.has(kind)) kinds.set(kind, { requests: 0, statuses: new Map(), families: new Map() });
+    const k = kinds.get(kind);
+    k.requests += n;
+    k.statuses.set(r.status, (k.statuses.get(r.status) ?? 0) + n);
+    const fam = r.ua === null ? 'User agent not in the data' : family(ua);
+    k.families.set(fam, (k.families.get(fam) ?? 0) + n);
+    if ((r.status >= 200 && r.status < 300) || r.status >= 500) {
+      const key = `${r.status} ${r.method} ${r.path.slice(0, 80)}`;
+      hits.set(key, (hits.get(key) ?? 0) + n);
+    }
+  }
   return {
     add(line) {
       lines++;
       const r = parseLine(line);
-      if (!r) return;
-      parsed++;
-      statuses.set(statusClass(r.status), (statuses.get(statusClass(r.status)) ?? 0) + 1);
-      if (r.status === 404) notFound++;
-      if (!r.ua || r.ua === '-') noUa++;
-      const tag = r.query?.match(SCANNER_TAG)?.[0]?.slice(1);
-      if (tag) tags.set(tag, (tags.get(tag) ?? 0) + 1);
-      const kind = probeKind(r);
-      if (r.addr) {
-        if (!perAddr.has(r.addr)) perAddr.set(r.addr, { requests: 0, probes: 0, misses: 0, paths: new Set(), noUa: 0 });
-        const a = perAddr.get(r.addr);
-        a.requests++;
-        if (kind) a.probes++;
-        else if (r.status >= 400 && r.status < 500) a.misses++;
-        if (a.paths.size < 5000) a.paths.add(r.path);
-        if (!r.ua || r.ua === '-') a.noUa++;
-      }
-      if (!kind) { if (r.status >= 400 && r.status < 500) otherMisses++; return; }
-      probeTotal++;
-      if (r.addr) probeAddrs.add(r.addr);
-      const named = r.ua.match(CRAWLER_NAMES)?.[0] ?? r.ua.match(SEARCH_NAMES)?.[0];
-      if (named) { disguised++; disguises.set(named.toLowerCase(), (disguises.get(named.toLowerCase()) ?? 0) + 1); }
-      if (!kinds.has(kind)) kinds.set(kind, { requests: 0, statuses: new Map(), families: new Map() });
-      const k = kinds.get(kind);
-      k.requests++;
-      k.statuses.set(r.status, (k.statuses.get(r.status) ?? 0) + 1);
-      const fam = family(r.ua);
-      k.families.set(fam, (k.families.get(fam) ?? 0) + 1);
-      if ((r.status >= 200 && r.status < 300) || r.status >= 500) {
-        const key = `${r.status} ${r.method} ${r.path.slice(0, 80)}`;
-        hits.set(key, (hits.get(key) ?? 0) + 1);
-      }
+      if (r) addRecord(r, 1);
+    },
+    /** One row of a GraphQL Analytics response: it stands for `count` requests. */
+    addGroup(row) {
+      groups++;
+      const { record, count } = parseGroup(row);
+      if (!record) return;
+      groupsRead++;
+      if (count) addRecord(record, count);
     },
     result() {
       const sorted = (m) => Object.fromEntries([...m].sort((a, b) => b[1] - a[1]));
@@ -130,12 +194,16 @@ export function logTally() {
       const busiest = addrs.sort((a, b) => b.requests - a.requests)[0];
       const scanners = addrs.filter((a) => a.requests >= 20 && (a.probes + a.misses) / a.requests >= 0.9);
       return {
+        source: groups ? 'analytics groups' : 'log lines',
+        ...(groups ? { groups: { rows: groups, read: groupsRead } } : {}),
         lines,
         parsed,
         statuses: sorted(statuses),
         not_found_share: parsed ? Math.round((notFound / parsed) * 100) : 0,
         breakdown: { probes: probeTotal, other_misses: otherMisses, rest: parsed - probeTotal - otherMisses },
         no_user_agent: noUa,
+        user_agent_not_in_data: uaUnknown,
+        addresses_in_data: perAddr.size > 0,
         probes: probeTotal,
         probe_addresses: probeAddrs.size,
         busiest_address: busiest ? { requests: busiest.requests, share: share(busiest.requests, parsed), probes_or_misses: share(busiest.probes + busiest.misses, busiest.requests), paths: busiest.paths.size, no_user_agent: busiest.noUa === busiest.requests } : null,
@@ -152,10 +220,17 @@ export function logTally() {
 /** The report as text. */
 export function formatLogs(rep) {
   const b = rep.breakdown;
-  const out = [`Read ${rep.parsed} of ${rep.lines} log lines (${rep.lines - rep.parsed} not understood)`];
+  const out = rep.groups
+    ? [`Read ${rep.groups.read} of ${rep.groups.rows} analytics rows (${rep.groups.rows - rep.groups.read} without a path), standing for ${rep.parsed} requests.`,
+      'Analytics counts are sampled estimates, and a query returns only its top rows: rare paths past its limit are missing, so treat these as a lower bound.']
+    : [`Read ${rep.parsed} of ${rep.lines} log lines (${rep.lines - rep.parsed} not understood)`];
   out.push(`All traffic by status: ${Object.entries(rep.statuses).map(([s, n]) => `${s} ${n}`).join(', ') || 'none'}; ${rep.not_found_share}% were 404s`);
   out.push(`Breakdown: probes ${b.probes} (${share(b.probes, rep.parsed)}%), other misses ${b.other_misses} (${share(b.other_misses, rep.parsed)}%), everything else ${b.rest} (${share(b.rest, rep.parsed)}%)`);
-  out.push(`Probes came from ${rep.probe_addresses} address${rep.probe_addresses === 1 ? '' : 'es'}. ${rep.no_user_agent} requests (${share(rep.no_user_agent, rep.parsed)}%) sent no user agent.`);
+  const who = [];
+  who.push(rep.addresses_in_data ? `Probes came from ${rep.probe_addresses} address${rep.probe_addresses === 1 ? '' : 'es'}.` : 'The data has no addresses, so there are no per-address counts.');
+  if (rep.user_agent_not_in_data < rep.parsed) who.push(`${rep.no_user_agent} requests (${share(rep.no_user_agent, rep.parsed)}%) sent no user agent.`);
+  else who.push('The data has no user agents, so probes are not split by client.');
+  out.push(who.join(' '));
   if (rep.busiest_address) {
     const a = rep.busiest_address;
     out.push(`The busiest address sent ${a.requests} requests (${a.share}% of all traffic) for ${a.paths} different paths; ${a.probes_or_misses}% were probes or misses${a.no_user_agent ? ', all with no user agent' : ''}. A rate limit at the CDN suits an address like this.`);
