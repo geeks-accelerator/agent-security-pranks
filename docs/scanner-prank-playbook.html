@@ -233,6 +233,27 @@ export const config = { matcher: ["/((?!_next/static|favicon.ico).*)"] };</code>
 });</code></pre>
 
 <h3>nginx</h3>
+<p>nginx answers a <code>POST</code> to a static file with 405 on its own, but with no <code>Allow</code> header, which RFC 9110 requires on every 405. <code>add_header</code> is not allowed in an <code>if</code> at server level, so the header goes on a named location that <code>error_page</code> sends the 405 to.</p>
+<pre><code># H1: refuse every method a read-only site doesn't use, with 405 and Allow.
+# The map goes at http level (a file in conf.d/ is). Exempt your API's prefix,
+# or drop that line on a site with none, so its POSTs still reach it.
+map "$request_method:$uri" $method_refused {
+    default          1;
+    "~^(GET|HEAD):"  0;
+    "~^[A-Z]+:/api/" 0;
+}
+
+server {
+    # ...
+    error_page 405 = @method_not_allowed;
+    location @method_not_allowed {
+        default_type text/plain;
+        add_header Allow "GET, HEAD" always;
+        return 405 "This site is read-only.\n";
+    }
+    if ($method_refused) { return 405; }
+}</code></pre>
+<p>Then the prank, in the same <code>server</code>:</p>
 <pre><code>location ~* (/\.env|/\.git(/|$)|/\.ssh/|/\.aws/|/id_(rsa|ed25519)|wp-config\.php) {
     default_type text/plain;
     add_header Cache-Control "no-store" always;
