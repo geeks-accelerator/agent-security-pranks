@@ -37,6 +37,10 @@
 // site has no prank either, but its 404 echoes the decoded path unescaped into HTML, which is a
 // hole whatever the prank: P5 fails.
 //
+// The plain site has no prank: every missing path, probes included, gets its one ordinary 404, plain
+// text, which echoes the path as sent, capped at 200 characters, with a line for AI agents. Nothing
+// there is a prank, so P3, P4 and C2 skip and C1 warns; P5 skips it, as an ordinary 404.
+//
 // The alias site redirects every request to another host: nothing of its own to score.
 // The blocked site's CDN answers the audit's homepage request with a block page.
 //
@@ -156,10 +160,19 @@ function reflect(req, res, path) {
   return res.writeHead(404, { 'content-type': 'text/html' }).end(`<!doctype html><html><head><title>Not found</title></head><body><p>No page at ${decodeURIComponent(path)}</p></body></html>`);
 }
 
+// No prank; its one ordinary 404 echoes the path as sent, cleaned and capped at 200 characters.
+function plain(req, res, path) {
+  if (!['GET', 'HEAD'].includes(req.method)) return res.writeHead(405, { allow: 'GET, HEAD', 'content-type': 'text/plain' }).end('Read-only.\n');
+  if (path === '/') return res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><html><head><title>Plain</title></head><body><h1>Plain</h1></body></html>');
+  const asked = path.replace(/[^\x20-\x7e]/g, '').slice(0, 200);
+  return res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff' })
+    .end(`Not found\n\nNothing is at ${asked}. An AI agent is welcome to read the library at /docs.\n`);
+}
+
 const alias = (req, res, path) => res.writeHead(301, { location: `https://elsewhere.example${path}` }).end();
 const blocked = (req, res) => res.writeHead(403, { server: 'cloudflare', 'content-type': 'text/html' }).end('<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>');
 
-const HANDLERS = { good, broken, api, cheeky, static: staticSite, stamped, express, reflect, alias, blocked };
+const HANDLERS = { good, broken, api, cheeky, static: staticSite, stamped, express, reflect, plain, alias, blocked };
 
 /** Start one fixture site. Returns { base, domain, log, hosts, close }. */
 export async function startFixture({ kind = 'good', domain = `${kind}.example` } = {}) {

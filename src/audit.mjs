@@ -190,7 +190,7 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     const fails = group(pranked, (r) => (/noindex/i.test(r.headers.get('x-robots-tag') ?? '') ? null : 'no X-Robots-Tag: noindex'));
     if (inSitemap.length) fails.unshift(`the sitemap lists ${inSitemap.slice(0, 3).join(', ')}${inSitemap.length > 3 ? ` and ${inSitemap.length - 3} more` : ''}`);
     const warns = group(pranked, (r) => cacheProblem(r.headers.get('cache-control')));
-    if (fails.length) wrong(id, name, level, `${fails.concat(warns).join('; ')}. Search shows an indexed prank to people looking for the site`);
+    if (fails.length) wrong(id, name, level, `${fails.concat(warns).join('; ')}. The 4xx keeps it out of search today; noindex keeps it out on the day it's served with a 200`);
     else if (!prank) skip(id, name, level, 'no prank found (C1), and the sitemap lists no probe paths');
     else if (warns.length) warn(id, name, level, `${warns.join('; ')}. An old prank keeps answering after you change it`);
     else pass(id, name, level, `${pranked.length} prank answers send noindex and no-store or a cache of a day or less; the sitemap lists no probe paths`);

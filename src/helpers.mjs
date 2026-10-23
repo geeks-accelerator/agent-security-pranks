@@ -221,15 +221,30 @@ export function agentHeaders(headers) {
  */
 export const taggedLinks = (text) => [...String(text ?? '').matchAll(/https?:\/\/[^\s"'<>]+\?[^\s"'<>]+|(?<=[\s"'(])\/[^\s"'<>]*\?[^\s"'<>]+/g)].map((m) => m[0]);
 
+// The shortest start of a path that counts as its echo when a site cuts the echo short (P5's
+// length cap): long enough that ordinary text on a 404 page won't match it by chance.
+const MIN_ECHO = 12;
+
 /**
  * A probe answer with the requested path removed, so a page that echoes the path compares
- * equal to the site's ordinary 404 page.
+ * equal to the site's ordinary 404 page. The path is removed as sent, decoded, and decoded with
+ * what isn't printable taken out (the clean echo P5 asks for). A site that caps the echo sends
+ * back only the path's start, so the longest start of each form found in the answer is removed,
+ * when it's at least MIN_ECHO characters.
  */
 export function withoutPath(text, path) {
   let out = String(text ?? '');
-  for (const p of new Set([path, decodedPath(path), (() => { try { return decodeURIComponent(path); } catch { return path; } })()])) {
-    if (p) out = out.split(p).join('');
-  }
+  const raw = (() => { try { return decodeURIComponent(path); } catch { return path; } })();
+  const forms = [path, decodedPath(path), raw, raw.replace(/[^\x20-\x7e]/g, ''), decodedPath(path).replace(/[^\x20-\x7e]/g, '')];
+  // The longest start of each form found in the answer (if a start of some length is there, every
+  // shorter one is too), removed longest first, so a short match doesn't strand the rest of a long one.
+  const found = [...new Set(forms.filter(Boolean))].map((p) => {
+    if (out.includes(p)) return p;
+    let lo = 0, hi = p.length;
+    while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if (out.includes(p.slice(0, mid))) lo = mid; else hi = mid - 1; }
+    return lo >= MIN_ECHO ? p.slice(0, lo) : '';
+  }).filter(Boolean).sort((a, b) => b.length - a.length);
+  for (const p of found) out = out.split(p).join('');
   return out.replace(/\s+/g, ' ').trim();
 }
 

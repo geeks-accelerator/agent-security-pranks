@@ -69,6 +69,19 @@ test('withoutPath makes a page that echoes the path compare equal to the ordinar
   assert.equal(withoutPath(page('/@fs/../.env'), '/@fs/..%2f.env'), withoutPath(page('/a'), '/a'));
 });
 
+test('withoutPath also removes an echo the site cut short or cleaned, so a plain 404 is not taken for a prank', () => {
+  // The audit's echo test asks for a long path with a line break and a tag in it. A site that caps
+  // the echo (P5) sends back only its start; one that cleans it sends back its printable characters.
+  const page = (p) => `Not found\n\nNothing is at ${p}. The library is at /docs.`;
+  const plain = withoutPath(page('/no-such-page-x'), '/no-such-page-x');
+  const probe = `/.env.marker123%0d%0a%3Cb%3E${'z'.repeat(600)}`;
+  assert.equal(withoutPath(page(probe.slice(0, 200)), probe), plain, 'the raw path, capped at 200 characters');
+  const cleaned = decodeURIComponent(probe).replace(/[^\x20-\x7e]/g, '');
+  assert.equal(withoutPath(page(cleaned.slice(0, 100)), probe), plain, 'decoded, with what is not printable taken out, capped at 100');
+  // A different page that happens to share a few characters with the path is still different.
+  assert.notEqual(withoutPath('Nothing is at /. The library is at /docs.', probe), plain);
+});
+
 test('looksLikePrank spots an env-file body and leaves pages alone', () => {
   assert.equal(looksLikePrank(codeBlocks.find((b) => b.includes('SECRET_MEETING_1'))), true);
   assert.equal(looksLikePrank('<h1>Page not found</h1>'), false);

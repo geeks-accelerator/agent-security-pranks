@@ -107,6 +107,19 @@ test('an ordinary 404 that echoes the path as unescaped HTML still fails P5, pra
   assert.doesNotMatch(by.P5.detail, /length cap/);
 });
 
+test('a site whose ordinary 404 echoes a capped path, and has no prank, is not scored as having one', async () => {
+  // Before 1.1.5 the echo test's answer, capped at 200 characters, didn't match the ordinary 404 once
+  // the path was taken out, so a plain 404 was scored as a prank: P3 failed and C2 passed for it.
+  const { rep } = await run('plain');
+  const by = byId(rep);
+  for (const r of rep.results.filter((x) => x.level === 'required')) assert.notEqual(r.status, 'fail', `${r.id}: ${r.detail}`);
+  assert.equal(rep.prank, false);
+  for (const id of ['P3', 'P4', 'P5', 'C2']) assert.equal(by[id].status, 'skip', `${id}: ${by[id].detail}`);
+  assert.equal(by.C1.status, 'warn');
+  // An ordinary 404 isn't the prank, so P5's prank rules skip it; the echo is clean anyway.
+  assert.match(by.P5.detail, /ordinary 404/);
+});
+
 test('a playful first draft warns on secret-named keys, a long cache and orders to agents, and fails nothing', async () => {
   const { rep } = await run('cheeky');
   const by = byId(rep);
