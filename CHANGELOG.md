@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 (unreleased)
+## 1.0.0 (2026-10-23)
 
 The first release: the Agent Security Pranks Standard and its scorecard, built from the Scanner Prank Playbook.
 
