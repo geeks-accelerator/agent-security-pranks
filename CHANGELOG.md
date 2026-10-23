@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.1 (2026-10-23)
 
 - **C2 catches a `curl` command with a quoted URL** (`curl -X POST "https://..."`). 1.1.0 caught only unquoted ones, so a prank that hands agents a ready-to-run sign-up command could pass. Found reviewing a draft prank for an agent travel site.
 
