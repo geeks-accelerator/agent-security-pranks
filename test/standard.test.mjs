@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { VERSION, REVIEW, score, matrix } from '../src/audit.mjs';
+import { credentialShapes } from '../src/helpers.mjs';
 
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const pkg = JSON.parse(read('package.json'));
@@ -53,6 +54,12 @@ test('every item the scorecard leaves to review is in the standard checklist', (
 test('no em dashes in the docs', () => {
   for (const file of ['README.md', 'STANDARD.md', 'AGENTS.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/adopting.md', 'docs/recipes.md', 'docs/scanner-prank-playbook.md']) {
     assert.doesNotMatch(read(file), /\u2014/, file);
+  }
+});
+
+test('no code example in the docs is shaped like a credential (P2 applies to examples)', () => {
+  for (const file of ['README.md', 'STANDARD.md', 'docs/adopting.md', 'docs/recipes.md', 'docs/scanner-prank-playbook.md']) {
+    for (const [, block] of read(file).matchAll(/```[a-z]*\n([\s\S]*?)```/g)) assert.deepEqual(credentialShapes(block), [], `${file}: ${block.slice(0, 60)}`);
   }
 });
 
