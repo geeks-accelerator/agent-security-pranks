@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.4 (2026-10-23)
 
 The standard sets rules, not values: the prank's wording, variable names, header names, link tags and page names are each project's own.
 
