@@ -165,6 +165,8 @@ nginx answers a `POST` to a static file with 405 on its own, but with no `Allow`
 map "$request_method:$uri" $method_refused {
     default          1;
     "~^(GET|HEAD):"  0;
+    # If anything on the site relies on CORS preflight, let OPTIONS through too:
+    # "~^OPTIONS:"     0;
     "~^[A-Z]+:/api/" 0;
 }
 
@@ -179,6 +181,8 @@ server {
     if ($method_refused) { return 405; }
 }
 ```
+
+Keep `OPTIONS` refused only if nothing on the site relies on CORS preflight: a browser sends it before a cross-origin request, and refusing it breaks that request (H1). The commented line in the `map` lets it through.
 
 The prank goes in the same `server`, as its own `location`:
 

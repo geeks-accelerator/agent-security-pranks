@@ -173,6 +173,8 @@ nginx answers a `POST` to a static file with 405 on its own, but with no `Allow`
 map "$request_method:$uri" $method_refused {
     default          1;
     "~^(GET|HEAD):"  0;
+    # If anything on the site relies on CORS preflight, let OPTIONS through too:
+    # "~^OPTIONS:"     0;
     "~^[A-Z]+:/api/" 0;
 }
 
