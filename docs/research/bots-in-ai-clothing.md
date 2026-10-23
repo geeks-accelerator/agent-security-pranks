@@ -62,7 +62,7 @@ Grouped by user agent (98% coverage). The Free plan has no bot score, so "browse
 
 ## Small sites are scanner food
 
-Each dot is one of the 49 domains that saw traffic. The less real traffic a site gets, the bigger the share that's attack noise. Scanners don't care how popular you are; they find new domains through public certificate logs within hours.
+Each dot is one of the 49 domains that saw traffic. The less real traffic a site gets, the bigger the share that's attack noise. Scanners don't care how popular you are; they find new domains through public certificate logs.
 
 ![Scatter plot of weekly requests per domain against the share that's probes. Small sites sit at 20 to 60% probes; the two biggest sites are near 0%.](bots-in-ai-clothing/domain-scatter.svg)
 

@@ -21,7 +21,7 @@
 - **The standard sets rules, not values.** Every example here is a placeholder or one illustration: the prank's wording and voice, what it offers, its variable names, header names, link tags, page names, which families get a reply. Those are each project's to choose. What the standard fixes is what keeps the joke safe: the status code, the headers, no credential shapes, an invitation rather than an order, a working `security.txt`. Where a format is real (an HTTP header, RFC 9116), it's named exactly. The scorecard checks the rules and never the wording. Be creative: the best pranks come from what only your project has, in a voice only it would use, and a copied example is the least funny thing a scanner's operator can read.
 - **A project may decline a recommended item,** such as the prank itself (C1). Record the decision and the reason in the stub (§10), and the item counts as met. Required items prevent harm, so they aren't declined; one that doesn't apply (H2 on a site with no framework) is skipped.
 - **One standard for every kind of site.** A static guide, a news site, an app behind a login, a site with an API and forms: the scorecard works out which items apply to each and skips the rest with the reason ([§3](#3-decide-what-applies)), so one `--matrix` run can cover a whole network of sites.
-- **The scorecard checks what's visible from outside.** It sends about 20 requests, a few at a time: eight probe paths, an echo test, a missing page, `GET`, `HEAD`, and an empty `POST` and `PUT` to `/`, the framework endpoint it detects, and up to 10 sitemap pages. It prints pass, warn or fail with the reason, and exits 1 when a required check fails, so it can gate a deploy. `--matrix <domains>` writes one status page for many sites.
+- **The scorecard checks what's visible from outside.** It sends about 20 requests, plus the sitemap and up to 10 of its pages, a few at a time: eight probe paths, an echo test, two missing pages, `GET`, `HEAD`, and an empty `POST` and `PUT` to `/`, the framework endpoint it detects, and the sitemap pages. It prints pass, warn or fail with the reason, and exits 1 when a required check fails, so it can gate a deploy. `--matrix <domains>` writes one status page for many sites.
 - **What it can't see** is listed under each item and in [§11](#11-the-checklist) as "review" or "test". Your own guard tests (T1) cover every route; the scorecard covers a sample.
 
 ---
@@ -41,7 +41,7 @@
 
 ## 2. What the traffic says
 
-One day of HTTP logs on a network of eleven small static sites (the playbook, October 2026):
+About 16 hours of HTTP logs on a network of eleven small prerendered sites (the playbook, October 2026):
 
 | Measure | Value |
 |---|---|
@@ -88,8 +88,8 @@ A week across one owner's sites on Cloudflare's Free plan (October 16 to 23, 202
 What it adds:
 
 - **The real AI crawlers weren't probing.** Of about 448k probes, none came from a bot Cloudflare could verify, and none got a 2xx. The problem is scanners, not AI.
-- **The biggest scanner wore AI-crawler names.** It rotated through about twenty (GPTBot, ClaudeBot, DeepSeekBot, GrokBot, KimiBot and more), each almost exactly 12,000 times, 308k requests in all and 39% of the week's probes, hunting `.env` files in AI-app folders (`/agents/.env`, `/chatbot/.env`) and dev-server file reads (`/@fs/`, `/__vite_rsc_findSourceMapURL`). A name says nothing about who's asking (principle 8). `--logs` counts probes sent under well-known crawler names.
-- **The smaller the site, the bigger the share of probes.** Scanners find new domains from public certificate logs within hours.
+- **The biggest scanner wore AI-crawler names.** It rotated through about twenty (GPTBot, ClaudeBot, DeepSeekBot, GrokBot, KimiBot and more), each almost exactly 12,000 times, 308k requests in all, 173k of them probes: 39% of the week's probes, hunting `.env` files in AI-app folders (`/agents/.env`, `/chatbot/.env`) and dev-server file reads (`/@fs/`, `/__vite_rsc_findSourceMapURL`). A name says nothing about who's asking (principle 8). `--logs` counts probes sent under well-known crawler names.
+- **The smaller the site, the bigger the share of probes.** Scanners find new domains from public certificate logs, so a site is probed before anyone links to it.
 - **A few machines send most of it.** Ten addresses sent 43% of the week's probes. None got a 2xx.
 
 Re-measure with `--logs` and add dated results here when a site's numbers change what an item should say.
@@ -139,7 +139,7 @@ Answer `404` for the endpoint in middleware or the proxy, before the framework. 
 
 ### H3. Pin your runtime and patch it
 
-**Level:** recommended. **Why:** if nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release by days.
+**Level:** recommended. **Why:** if nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release: on 2026-10-22, Railway's builder still chose Node 24.21.0 the day after 24.22.1 shipped.
 
 Pin the runtime in the project (`engines`, `.nvmrc`, `.python-version`, the host's setting) to a version on its current security release, and update it when one ships.
 
@@ -152,7 +152,7 @@ Pin the runtime in the project (`engines`, `.nvmrc`, `.python-version`, the host
 On Cloudflare's Free plan (5 custom rules, no regex, 1 rate limiting rule, Bot Fight Mode as an on/off switch):
 - **Optionally, block probe families you don't prank.** A custom rule that blocks paths no visitor ever needs (`.php` on a site without PHP, `/wp-` paths, `/cgi-bin/`, `/actuator`) costs no welcome visitor anything. Leave out the families your prank answers: a blocked request never reaches the prank. Match on `starts_with` and `ends_with`, or `contains` with a full segment (`"/.git/"`), not short fragments: `contains "/wp-"` also blocks an article slug like `/news/wp-engine-outage`. Exempt your real content and API prefixes, and test the rule against every sitemap URL first. [docs/recipes.md](docs/recipes.md) has the rule.
 - **Keep Bot Fight Mode off on a site that welcomes agents.** On the Free plan it can't be skipped by any rule, so it challenges scripts, headless browsers and MCP clients along with the scanners.
-- **Check the AI bot settings.** Cloudflare's AI Crawl Control groups AI bots as Search, Agent and Training, and its defaults can block some of them, for example agents on pages with ads. Set each to what you mean. For a site that welcomes agents, that's Allow.
+- **Check the AI bot settings.** Cloudflare's AI Crawl Control groups AI bots and can block some by default. Secondary reports describe Search, Agent and Training groups and agents blocked on pages with ads (§12); read the names and defaults in your own dashboard. Set each group to what you mean. For a site that welcomes agents, that's Allow.
 - **Don't challenge or block by user agent or verified status (X3).** Unverified isn't the same as unwelcome.
 
 **Done when:** any edge rule added for scanners matches paths only, has been tested against the sitemap, and leaves the prank's paths alone; Bot Fight Mode and the AI bot settings match what the site welcomes. **Checked in review.**
@@ -165,7 +165,7 @@ These apply to every answer a probe gets, prank or not. P3 to P7 apply once ther
 
 ### P1. Probes answer with a failure
 
-**Level:** required. **Why:** scanners score by status code. A `200` on `/.env` marks the site as "found something" on shared target lists, brings more traffic, and can get the domain flagged by security vendors. A `5xx` means the probe reached code that crashed.
+**Level:** required. **Why:** scanners score by status code. A `200` on `/.env` marks the site as "found something" on shared target lists, and brings more traffic. A `5xx` means the probe reached code that crashed.
 
 Serve the prank with `404`. Any 4xx keeps the scanner's verdict a miss: `418` is a harmless classic (RFC 9110 reserves it, from an April Fools' RFC), but a message is funnier.
 
@@ -327,7 +327,7 @@ MORE_SECRETS=https://example.com/hours
 
 The words are yours: the shape above (who it's for, what the site offers instead, a link, the door for researchers) is the guideline.
 
-**A note in a header, too.** Many scanners and agents log response headers even when they skip the body, so the prank's answers can carry the note in an `X-` header as well:
+**A note in a header, too.** A tool that records headers and skips the body still sees a note there, so the prank's answers can carry it in an `X-` header as well:
 
 ```
 X-[Your-Header-Name]: [one line in your voice: what the site offers instead of secrets] https://[your-domain]/[a page]?[parameter]=[your-tag]

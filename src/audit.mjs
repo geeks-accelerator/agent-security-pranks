@@ -95,10 +95,12 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   const longRun = 'z'.repeat(600);
   const echoPath = `/.env.${marker}%0d%0a%3Cb%3E${longRun}`;
   const missingPath = `/no-such-page-${rand}`;
+  const missingPath2 = `/no-such-page-${rand}-again`;
   const framework = FRAMEWORK_ENDPOINTS.find((f) => f.detect(home)) ?? null;
 
-  const [missing, head, post, put, fw, robots, sitemap, ...probes] = await mapLimit([
+  const [missing, missing2, head, post, put, fw, robots, sitemap, ...probes] = await mapLimit([
     () => get(origin + missingPath),
+    () => get(origin + missingPath2),
     () => get(`${origin}/`, { method: 'HEAD' }),
     () => get(`${origin}/`, { method: 'POST', body: '' }),
     () => get(`${origin}/`, { method: 'PUT', body: '' }),
@@ -113,13 +115,21 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // Which probes got a prank: an answer that isn't the site's ordinary 404 page, or one shaped like
   // an env file. A CDN or firewall block page is neither: the request never reached the site.
   const missingNorm = withoutPath(missing.text, missingPath);
+  // Some 404 pages differ on every request (a request ID, a nonce, a timestamp), so "differs from
+  // the ordinary 404" can't tell a prank from the site's own page there. Two missing pages that
+  // differ from each other show it; then only an env-shaped answer, or one whose status or content
+  // type differs from the ordinary 404, counts as a prank.
+  const variable404 = missing2.status === missing.status && withoutPath(missing2.text, missingPath2) !== missingNorm;
+  const unlike404 = (p, r) => (variable404
+    ? r.status !== missing.status || ct(r) !== ct(missing)
+    : withoutPath(r.text, p) !== missingNorm);
   // An API's own error (JSON, or an auth or rate-limit status) is the API answering, not a prank:
   // sites with an API under /api answer /API/.ENV that way, and that's fine.
   const blocked = probeRows.filter(({ r }) => edgeBlock(r));
   const apiAnswer = (r) => !looksLikePrank(r.text) && (/json/i.test(r.type) || [401, 403, 405, 429].includes(r.status));
   const byApi = probeRows.filter(({ r }) => !edgeBlock(r) && r.status >= 400 && r.status < 500 && apiAnswer(r));
   const isPrank = ({ path: p, r }) => r.status >= 400 && r.status < 500 && r.text.trim() !== '' && !edgeBlock(r) && !apiAnswer(r)
-    && (withoutPath(r.text, p) !== missingNorm || looksLikePrank(r.text));
+    && (unlike404(p, r) || looksLikePrank(r.text));
   const pranked = probeRows.filter(isPrank);
   const prankBodies = new Set(pranked.map(({ path: p, r }) => withoutPath(r.text, p)));
   const prank = pranked.length > 0;
@@ -203,9 +213,15 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // ---- P5 an echoed path is cleaned (required, where the prank echoes the path) ----
   {
     const id = 'P5', name = 'Echoed path cleaned', level = 'required';
-    const echo = probes[probes.length - 1];
-    const problems = echo.status >= 400 && echo.status < 500 ? echoProblems(echo.text, marker, longRun, echo.type) : null;
-    if (!problems) skip(id, name, level, 'the prank doesn\'t echo the requested path');
+    const echoRow = probeRows[probeRows.length - 1];
+    const echo = echoRow.r;
+    const found = echo.status >= 400 && echo.status < 500 ? echoProblems(echo.text, marker, longRun, echo.type) : null;
+    // The length and character rules are the prank's. An ordinary 404 that echoes the path (Express's
+    // "Cannot GET <path>") answers to them only for one thing: an HTML tag from the path, unescaped.
+    const prankEcho = isPrank(echoRow);
+    const problems = found && !prankEcho ? found.filter((x) => /HTML tag/.test(x)) : found;
+    if (!found) skip(id, name, level, 'the prank doesn\'t echo the requested path');
+    else if (!prankEcho && !problems.length) skip(id, name, level, 'the echo test got the site\'s ordinary 404, which echoes the path escaped; the prank rules don\'t apply to it');
     else if (problems.length) wrong(id, name, level, `${problems.join('; ')}: the scanner controls the path, so strip it to printable ASCII and cap its length`);
     else pass(id, name, level, 'the echoed path comes back as printable ASCII with a length cap');
   }

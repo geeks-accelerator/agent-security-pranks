@@ -8,7 +8,7 @@ Each rule is an item in the [Agent Security Pranks Standard](../STANDARD.md), wi
 
 ## What is knocking
 
-We measured one day of HTTP logs on a network of eleven small static sites. Most requests had nothing to do with readers.
+We measured about 16 hours of HTTP logs on a network of eleven small prerendered sites. Most requests had nothing to do with readers.
 
 | | |
 | --- | --- |
@@ -25,15 +25,15 @@ A prank is a garnish. The useful part is refusing what your site never needs, so
 
 - **Refuse methods you do not use (H1).** A read-only site answers anything but `GET` and `HEAD` with `405` and `Allow: GET, HEAD`. On our sites this turned framework 500s with stack traces in the log into clean refusals.
 - **Refuse framework endpoints you do not use (H2).** Next.js serves its image optimizer at `/_next/image` even if no page uses it, and that endpoint carried a critical remote-code-execution advisory in 2026. Return `404` for it.
-- **Pin your runtime and patch it (H3).** If nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release by days.
+- **Pin your runtime and patch it (H3).** If nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release: on 2026-10-22, Railway's builder still chose Node 24.21.0 the day after 24.22.1 shipped.
 
 ## The ground rules
 
 A prank on a public domain speaks in your name. These keep it a joke.
 
-- **Keep the status a failure (P1).** Serve the joke with `404`, never `200`. Scanners score by status code. A `200` on `/.env` marks you as "found something" on shared target lists, brings more traffic, and can get the domain flagged by security vendors.
+- **Keep the status a failure (P1).** Serve the joke with `404`, never `200`. Scanners score by status code. A `200` on `/.env` marks you as "found something" on shared target lists, and brings more traffic.
 - **Never make anything look like a real credential (P2).** No strings shaped like API keys, tokens or connection URLs. Anything a scanner's regex would extract as a secret is a false alarm for someone else to chase.
-- **Never cache or index it (P3).** Send `Cache-Control: no-store` and `X-Robots-Tag: noindex`, and keep it out of the sitemap.
+- **Never index it, and don't cache it for long (P3).** Send `X-Robots-Tag: noindex` and `Cache-Control: no-store` or a cache of a day or less, and keep it out of the sitemap.
 - **Serve plain text (P4, P5).** Use `Content-Type: text/plain` with `X-Content-Type-Options: nosniff`. If you echo the requested path back, strip it to printable ASCII and cap its length first, because the scanner controls it.
 - **Match narrowly and prove it (P6).** Run your pattern over every real route you serve and require zero matches. Then run it over your logs to see what it catches.
 - **If the joke states facts, quote them (P7).** Ours lists real public meetings. A test fails if any quoted time or place does not appear word for word in the published source.
@@ -107,7 +107,8 @@ The last alternative matches any filename containing "credential", "secret" or "
 ### Next.js (proxy or middleware)
 
 ```
-// src/proxy.ts (Next 16) or src/middleware.ts (Next 15 and earlier)
+// src/proxy.ts (Next 16). On Next 15 and earlier, name the file src/middleware.ts and the
+// function middleware: Next 15 runs only a function by that name (or a default export).
 import { NextResponse, type NextRequest } from "next/server";
 
 const READ_METHODS = new Set(["GET", "HEAD"]);
@@ -208,7 +209,7 @@ Each of these should run against the built server, and each should be shown fail
 | `GET /.env`, `/.git/config`, `/.ssh/id_rsa`, `/@fs/..%2f.env` | 404, no-store, noindex, text/plain, prank body | The routing breaking silently |
 | `GET /some-missing-page` | Your normal 404, no prank body | Readers seeing the joke |
 | Every real route | Zero pattern matches | A pattern that is too broad |
-| `POST /`, `PUT`, `OPTIONS` | 405 with `Allow: GET, HEAD` | The method guard |
+| `POST /`, `PUT /` | 405 with `Allow: GET, HEAD` (leave `OPTIONS` alone if anything relies on CORS preflight) | The method guard |
 | `HEAD /`, `GET /` | 200 | A guard that refuses too much |
 | Unused framework endpoint | 404 | The endpoint coming back |
 

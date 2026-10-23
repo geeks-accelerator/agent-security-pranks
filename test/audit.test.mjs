@@ -85,6 +85,28 @@ test('an app with an API and a form, and no prank, passes every required check',
   for (const id of ['P3', 'P4', 'C2', 'H2']) assert.equal(by[id].status, 'skip', id);
 });
 
+// A 404 page with a request ID, and Express's default 404 that echoes the path: neither is a
+// prank, and a site with no prank that's otherwise safe passes every required check.
+for (const [kind, page] of [['stamped', 'a 404 page with a request ID'], ['express', "Express's default 404 page"]]) {
+  test(`a site with no prank and ${page} passes every required check`, async () => {
+    const { rep } = await run(kind);
+    const by = byId(rep);
+    for (const r of rep.results.filter((x) => x.level === 'required')) assert.notEqual(r.status, 'fail', `${r.id}: ${r.detail}`);
+    assert.equal(rep.prank, false);
+    for (const id of ['P3', 'P4', 'P5', 'C2']) assert.equal(by[id].status, 'skip', `${id}: ${by[id].detail}`);
+    assert.equal(by.C1.status, 'warn');
+  });
+}
+
+test('an ordinary 404 that echoes the path as unescaped HTML still fails P5, prank or not', async () => {
+  const { rep } = await run('reflect');
+  const by = byId(rep);
+  assert.equal(rep.prank, false);
+  assert.equal(by.P5.status, 'fail');
+  assert.match(by.P5.detail, /an HTML tag from the path came back unescaped in text\/html/);
+  assert.doesNotMatch(by.P5.detail, /length cap/);
+});
+
 test('a playful first draft warns on secret-named keys, a long cache and orders to agents, and fails nothing', async () => {
   const { rep } = await run('cheeky');
   const by = byId(rep);
