@@ -188,6 +188,20 @@ export function edgeBlock(r) {
   return null;
 }
 
+/**
+ * What's wrong with a security.txt (RFC 9116), or null. It needs at least one Contact and an
+ * Expires date that hasn't passed; a researcher who finds an expired or contactless file has no door.
+ */
+export function securityTxtProblem(r, now = new Date()) {
+  if (!r || !(r.status >= 200 && r.status < 300)) return `answers ${r?.status || r?.error || 'nothing'}`;
+  if (!/^text\/plain/i.test(r.headers.get('content-type') ?? '')) return `is ${(r.headers.get('content-type') ?? 'untyped').split(';')[0]}, not text/plain`;
+  if (!/^contact:\s*\S+/im.test(r.text)) return 'has no Contact line';
+  const expires = r.text.match(/^expires:\s*(\S+)/im)?.[1];
+  if (!expires || Number.isNaN(Date.parse(expires))) return 'has no valid Expires date';
+  if (Date.parse(expires) < now.getTime()) return `expired on ${expires.slice(0, 10)}`;
+  return null;
+}
+
 /** A link in a prank tagged so follow-through can be counted (C1, T2): ?ref=scanner-..., source=scanner:... */
 export const SCANNER_TAG = /[?&](ref|source|utm_source)=scanner[-:_.\w]*/i;
 

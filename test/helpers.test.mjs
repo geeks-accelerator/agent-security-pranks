@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
+import { isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
 import { looksLikePrank } from '../src/audit.mjs';
 import { parseLine, family, probeKind, logTally, formatLogs } from '../src/logs.mjs';
 
@@ -174,6 +174,16 @@ test('secret-named keys with one-word values are flagged; settings and phrases a
   const envExample = codeBlocks.find((b) => b.includes('SECRET_MEETING_1'));
   assert.deepEqual(secretAssignments(envExample), []);
   assert.deepEqual(secretAssignments('PASSWORD_REQUIRED=false\nSECRETS_HERE=none\nAPI_KEY="there is no key, only a clock"\nMORE_SECRETS=https://example.com/x\nPRIVATE_THOUGHTS=/archive\nKEYS=0'), []);
+});
+
+test('securityTxtProblem wants text/plain, a Contact and an unexpired Expires', () => {
+  const res = (status, text, type = 'text/plain') => ({ status, text, headers: new Headers({ 'content-type': type }) });
+  const now = new Date('2026-10-23T00:00:00Z');
+  assert.equal(securityTxtProblem(res(200, 'Contact: mailto:security@example.com\nExpires: 2027-06-01T00:00:00.000Z\n'), now), null);
+  assert.equal(securityTxtProblem(res(404, ''), now), 'answers 404');
+  assert.match(securityTxtProblem(res(200, '<html>', 'text/html'), now), /not text\/plain/);
+  assert.equal(securityTxtProblem(res(200, 'Expires: 2027-06-01T00:00:00.000Z\n'), now), 'has no Contact line');
+  assert.equal(securityTxtProblem(res(200, 'Contact: mailto:a@example.com\nExpires: 2026-01-01T00:00:00.000Z\n'), now), 'expired on 2026-01-01');
 });
 
 test('cacheProblem allows no-store and a day or less', () => {

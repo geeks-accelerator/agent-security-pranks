@@ -8,7 +8,7 @@
 // PUT to / that create nothing. It never follows a redirect off the site. Node 26 or later, no dependencies.
 
 import { request, TIMEOUT_MS } from './http.mjs';
-import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, SCANNER_TAG } from './helpers.mjs';
+import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, SCANNER_TAG } from './helpers.mjs';
 
 export const VERSION = '1.1.0';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
@@ -119,6 +119,9 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   const pranked = probeRows.filter(isPrank);
   const prankBodies = new Set(pranked.map(({ path: p, r }) => withoutPath(r.text, p)));
   const prank = pranked.length > 0;
+  // The prank should point real researchers to security.txt (C2); if it does, the file must work.
+  const linksSecurityTxt = pranked.some(({ r }) => /security\.txt/i.test(r.text));
+  const securityTxt = linksSecurityTxt ? await get(`${origin}/.well-known/security.txt`, { follow: true }) : null;
 
   // The sitemap's pages: robots.txt's Sitemap lines, else /sitemap.xml, one index level deep.
   const sitemapUrls = ok(robots) ? [...robots.text.matchAll(/^\s*sitemap:\s*(\S+)/gim)].map((m) => m[1]) : [];
@@ -293,9 +296,15 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   {
     const id = 'C2', name = 'A note for AI agents', level = 'recommended';
     const orders = [...new Set(pranked.flatMap(({ r }) => instructsAgent(r.text)))];
+    const door = securityTxt ? securityTxtProblem(securityTxt) : null;
+    const problems = [];
+    if (orders.length) problems.push(`the prank gives the agent ${orders.join(' and ')}. That works only on an agent that obeys instructions it finds in a response, against its operator's task. Invite the operator instead, with a link`);
+    if (door) problems.push(`the prank points to /.well-known/security.txt, which ${door}: a real researcher who follows it finds no way to report`);
+    const noted = pranked.some(({ r }) => /\b(ai agents?|agents?|llms?|language models?)\b/i.test(r.text));
+    const tail = linksSecurityTxt ? ', and points real researchers to a working security.txt' : '. Add a link to /.well-known/security.txt, so a real researcher has a way to report';
     if (!prank) skip(id, name, level, 'no prank found (C1)');
-    else if (orders.length) warn(id, name, level, `the prank gives the agent ${orders.join(' and ')}. That works only on an agent that obeys instructions it finds in a response, against its operator's task. Invite the operator instead, with a link`);
-    else if (pranked.some(({ r }) => /\b(ai agents?|agents?|llms?|language models?)\b/i.test(r.text))) pass(id, name, level, 'the prank has a note addressed to AI agents, and gives them no orders');
+    else if (problems.length) warn(id, name, level, problems.join('; '));
+    else if (noted) pass(id, name, level, `the prank has a note addressed to AI agents, gives them no orders${tail}`);
     else miss(id, name, level, 'the prank has no note for AI agents. Some scanners are driven by language models that read the answer');
   }
 

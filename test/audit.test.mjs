@@ -23,6 +23,7 @@ test('the good fixture passes every scored check', async () => {
   assert.equal(rep.prank, true);
   assert.equal(rep.framework, 'Next.js');
   assert.match(by.P6.detail, /read 4 of 4 sitemap pages/);
+  assert.match(by.C2.detail, /points real researchers to a working security\.txt/);
   assert.match(by.C1.detail, /^7 of 7 probes that reached the site get a prank .*\/wp-config\.php blocked by Cloudflare/);
 
   // --logs reads what the audit just requested, and names it.
@@ -81,6 +82,7 @@ test('a playful first draft warns on secret-named keys, a long cache and orders 
   assert.match(by.P2.detail, /SECRET_KEY, DATABASE_PASSWORD are given a one-word value/);
   assert.match(by.P3.detail, /cached for 168 hours/);
   assert.match(by.C2.detail, /gives the agent a request to send/);
+  assert.match(by.C2.detail, /security\.txt, which answers 404/);
   assert.equal(by.P2.status, 'warn');
   assert.equal(by.P3.status, 'warn');
 });

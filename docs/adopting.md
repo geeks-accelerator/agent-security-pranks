@@ -31,6 +31,7 @@ Everything below is for that agent. The lessons at the end come from the sites t
    - Every value plainly not a credential (P2): no strings shaped like keys, tokens or connection URLs, even fake ones, and no secret-shaped name (`SECRET_KEY`, `DATABASE_PASSWORD`) with a one-word value. `PASSWORD_REQUIRED=false` is fine.
    - If it states facts, build them from the same source the site publishes (P7).
    - Add a note for AI agents that invites the operator, with a link (C2). Never tell the agent to send a request, run a command or register: that's a prompt injection, however friendly.
+   - End the note with a link to `/.well-known/security.txt`, and serve that file if the site doesn't yet: a real inbox and an `Expires` under a year ahead ([recipes.md](recipes.md)). The joke is for scanners; a real researcher needs a way to report.
    - A prank is optional. If the owner doesn't want one, skip this step, record C1 as declined with the reason, and do the rest: the hardening and the rules are what keep the site safe.
 
 5. **Add the guard** behind the probe pattern: status 404, `X-Robots-Tag: noindex`, `Content-Type: text/plain`, `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store` or a cache of a day or less (P1, P3, P4). If you echo the path, strip it to printable ASCII and cap its length (P5). Every other missing page keeps the normal 404 (P8). Run the pattern over every real route first, and narrow it if anything matches (P6).
