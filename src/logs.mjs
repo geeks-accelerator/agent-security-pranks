@@ -92,6 +92,29 @@ export function logTally({ tags: wanted = [] } = {}) {
   const perAddr = new Map(); // addr -> { requests, probes, misses, paths: Set, noUa }
   const hits = new Map(); // "status method path" -> count, for probes that got 2xx or 5xx
   const tags = new Map(); // tag -> count, for prank links followed
+  // Requests with a method other than GET or HEAD, held per "method path" until
+  // the end: on a site with an API, POST /api/... is real traffic. A method and
+  // path that got a 2xx or a 3xx anywhere in the log is one the site serves (a
+  // form that POSTs and redirects answers 303), not a probe.
+  const methodRequests = new Map(); // "METHOD path" -> [{ status, ua, addr }]
+  const served = new Set(); // "METHOD path" that got a 2xx
+  let methodsResolved = false;
+  const countProbe = (r, kind) => {
+    probeTotal++;
+    if (r.addr) probeAddrs.add(r.addr);
+    const named = r.ua.match(CRAWLER_NAMES)?.[0] ?? r.ua.match(SEARCH_NAMES)?.[0];
+    if (named) { disguised++; disguises.set(named.toLowerCase(), (disguises.get(named.toLowerCase()) ?? 0) + 1); }
+    if (!kinds.has(kind)) kinds.set(kind, { requests: 0, statuses: new Map(), families: new Map() });
+    const k = kinds.get(kind);
+    k.requests++;
+    k.statuses.set(r.status, (k.statuses.get(r.status) ?? 0) + 1);
+    const fam = family(r.ua);
+    k.families.set(fam, (k.families.get(fam) ?? 0) + 1);
+    if ((r.status >= 200 && r.status < 300) || r.status >= 500) {
+      const key = `${r.status} ${r.method} ${r.path.slice(0, 80)}`;
+      hits.set(key, (hits.get(key) ?? 0) + 1);
+    }
+  };
   return {
     add(line) {
       lines++;
@@ -104,32 +127,37 @@ export function logTally({ tags: wanted = [] } = {}) {
       const query = decodeQuery(r.query);
       for (const t of wanted) if (query.includes(t)) tags.set(t, (tags.get(t) ?? 0) + 1);
       const kind = probeKind(r);
+      const methodKind = kind === `${r.method} requests`;
+      if (methodKind) {
+        const key = `${r.method} ${r.path}`;
+        if (r.status >= 200 && r.status < 400) served.add(key);
+        if (!methodRequests.has(key)) methodRequests.set(key, []);
+        methodRequests.get(key).push({ status: r.status, ua: r.ua, addr: r.addr, method: r.method, path: r.path });
+      }
       if (r.addr) {
         if (!perAddr.has(r.addr)) perAddr.set(r.addr, { requests: 0, probes: 0, misses: 0, paths: new Set(), noUa: 0 });
         const a = perAddr.get(r.addr);
         a.requests++;
-        if (kind) a.probes++;
-        else if (r.status >= 400 && r.status < 500) a.misses++;
+        if (kind && !methodKind) a.probes++;
+        else if (!kind && r.status >= 400 && r.status < 500) a.misses++;
         if (a.paths.size < 5000) a.paths.add(r.path);
         if (!r.ua || r.ua === '-') a.noUa++;
       }
       if (!kind) { if (r.status >= 400 && r.status < 500) otherMisses++; return; }
-      probeTotal++;
-      if (r.addr) probeAddrs.add(r.addr);
-      const named = r.ua.match(CRAWLER_NAMES)?.[0] ?? r.ua.match(SEARCH_NAMES)?.[0];
-      if (named) { disguised++; disguises.set(named.toLowerCase(), (disguises.get(named.toLowerCase()) ?? 0) + 1); }
-      if (!kinds.has(kind)) kinds.set(kind, { requests: 0, statuses: new Map(), families: new Map() });
-      const k = kinds.get(kind);
-      k.requests++;
-      k.statuses.set(r.status, (k.statuses.get(r.status) ?? 0) + 1);
-      const fam = family(r.ua);
-      k.families.set(fam, (k.families.get(fam) ?? 0) + 1);
-      if ((r.status >= 200 && r.status < 300) || r.status >= 500) {
-        const key = `${r.status} ${r.method} ${r.path.slice(0, 80)}`;
-        hits.set(key, (hits.get(key) ?? 0) + 1);
-      }
+      if (!methodKind) countProbe(r, kind);
     },
     result() {
+      // Unused methods: only a method and path the site never served counts.
+      if (!methodsResolved) {
+        methodsResolved = true;
+        for (const [key, requests] of methodRequests) {
+          if (served.has(key)) continue;
+          for (const r of requests) {
+            countProbe(r, `${r.method} requests`);
+            if (r.addr) perAddr.get(r.addr).probes++;
+          }
+        }
+      }
       const sorted = (m) => Object.fromEntries([...m].sort((a, b) => b[1] - a[1]));
       const addrs = [...perAddr.values()];
       const busiest = addrs.sort((a, b) => b.requests - a.requests)[0];
