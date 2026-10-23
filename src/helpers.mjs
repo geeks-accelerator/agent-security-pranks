@@ -203,21 +203,13 @@ export function securityTxtProblem(r, now = new Date()) {
 }
 
 /**
- * A static site's written exception to P1 (STANDARD.md): it may answer env-file probes with a 200
- * if it says so on the answer itself, with this header. The scorecard can't read the site's docs,
- * so the declaration travels with the response, and P1 warns instead of failing.
- */
-export const STATIC_SITE_HEADER = 'x-static-site';
-export const declaresStatic = (r) => /^(true|1|yes)$/i.test((r.headers.get(STATIC_SITE_HEADER) ?? '').trim());
-
-/**
  * Notes for AI agents carried in response headers on the prank (C2): X- headers whose value talks
  * to agents. Many scanners and agents log headers even when they skip the body.
  */
 const AGENT_WORDS = /\b(ai agents?|agents?|artificial minds?|llms?|language models?|bots?|robots?|operators?)\b/i;
 export function agentHeaders(headers) {
   const out = [];
-  for (const [name, value] of headers) if (/^x-/i.test(name) && name.toLowerCase() !== STATIC_SITE_HEADER && AGENT_WORDS.test(value)) out.push([name, value]);
+  for (const [name, value] of headers) if (/^x-/i.test(name) && AGENT_WORDS.test(value)) out.push([name, value]);
   return out;
 }
 

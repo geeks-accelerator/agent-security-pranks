@@ -18,7 +18,7 @@
 - **Every item has a level:**
   - **Required**, because skipping it harms someone: your site (a 200 on `/.env` puts it on shared target lists), a stranger (a fake key someone has to chase), or your readers (a mistyped URL that shows the joke). Some required items apply only where they're true, such as P5 for a prank that echoes the path.
   - **Recommended**, when it fits the project: the prank itself, and the note for AI agents.
-- **A project may decline a recommended item,** such as the prank itself (C1). Record the decision and the reason in the stub (§10), and the item counts as met. Required items prevent harm, so they aren't declined; one that doesn't apply (H2 on a site with no framework) is skipped. The one written exception is P1's for static sites, below.
+- **A project may decline a recommended item,** such as the prank itself (C1). Record the decision and the reason in the stub (§10), and the item counts as met. Required items prevent harm, so they aren't declined; one that doesn't apply (H2 on a site with no framework) is skipped.
 - **One standard for every kind of site.** A static guide, a news site, an app behind a login, a site with an API and forms: the scorecard works out which items apply to each and skips the rest with the reason ([§3](#3-decide-what-applies)), so one `--matrix` run can cover a whole network of sites.
 - **The scorecard checks what's visible from outside.** It sends about 20 requests, a few at a time: eight probe paths, an echo test, a missing page, `GET`, `HEAD`, and an empty `POST` and `PUT` to `/`, the framework endpoint it detects, and up to 10 sitemap pages. It prints pass, warn or fail with the reason, and exits 1 when a required check fails, so it can gate a deploy. `--matrix <domains>` writes one status page for many sites.
 - **What it can't see** is listed under each item and in [§11](#11-the-checklist) as "review" or "test". Your own guard tests (T1) cover every route; the scorecard covers a sample.
@@ -165,11 +165,11 @@ These apply to every answer a probe gets, prank or not. P3 to P7 apply once ther
 
 Serve the prank with `404`. Any 4xx keeps the scanner's verdict a miss: `418` is a harmless classic (RFC 9110 reserves it, from an April Fools' RFC), but a message is funnier.
 
-**The static-site exception.** A purely static site (no server-side code, no environment file anywhere in its build or deploy) may answer env-file probes (`/.env` and its variants) with a 200, as a decision written in its stub (§10) and declared on the answer itself with the header `X-Static-Site: true`. Why it's allowed: such a site has no `.env` to leak or to confuse with the joke, and a 200 joke is a choice its owner can make with eyes open. Why it still warns: the harms above don't depend on the site. Scanners that only read the status record a find, shared target lists bring more probes, and someone may email "your .env is public". Never use it on an app, or on anything that could ever hold a real `.env`: there a 200 teaches scanners the path is live, and a person auditing the site can't tell the joke from a leak. Every other probe still gets a 4xx, and P2 to P5 grade the 200 answers like any prank.
+**Not even on a static site.** It's tempting on a site with no server code: there's no `.env` to leak, so why not let the joke answer 200? Because the harms above have nothing to do with what the site holds. Scanners that read only the status record a find; shared target lists bring more probes; security vendors and researchers report "your .env is public", and someone has to answer them; and a person auditing the site later can't tell the joke from a leak without reading it. Everything that reads the body gets the same joke with a 404.
 
-**Done when:** every probe path gets a 4xx, or, on a static site under the exception, the env-file probes get the declared 200 and every other probe a 4xx.
+**Done when:** every probe path gets a 4xx.
 
-**Scorecard:** requests eight probe paths and an echo test (`/.env`, `/.env.production`, `/.git/config`, `/.ssh/id_rsa`, `/.aws/credentials`, `/wp-config.php`, `/@fs/..%2f.env`, `/API/.ENV`). A 2xx or a 5xx fails, no answer fails, and a redirect warns: scanners follow it and score the target. A CDN's block page and an API's own error are both 4xx, so both pass. An env-file probe answered 200 with `X-Static-Site: true` warns instead of failing (the static-site exception); a 200 on any other probe, or without the header, still fails.
+**Scorecard:** requests eight probe paths and an echo test (`/.env`, `/.env.production`, `/.git/config`, `/.ssh/id_rsa`, `/.aws/credentials`, `/wp-config.php`, `/@fs/..%2f.env`, `/API/.ENV`). A 2xx or a 5xx fails, no answer fails, and a redirect warns: scanners follow it and score the target. A CDN's block page and an API's own error are both 4xx, so both pass. A 200 fails on every site, static or not, whatever the answer's headers say.
 
 ### P2. Nothing shaped like a credential
 
@@ -394,6 +394,7 @@ Read a day of request logs before you ship: count 5xx responses, probe paths, an
 - **Challenging crawler names that fail verification.** Cloudflare's Free plan can express it (`not cf.client.bot` with a user-agent match), and it does catch the scanners that wear crawler names. It also challenges real assistants and new crawlers whenever verification misses them, and everything that isn't on a verified list. This standard welcomes them (principle 8, X3), and blocking the probe paths (H4) stops the same scanners without asking anyone who they are.
 - **Bot Fight Mode on a site that welcomes agents.** On the Free plan it can't be skipped, so it challenges agents and scripts along with scanners (H4).
 - **Parked and redirect-only domains.** There's no site to answer with, so nothing here applies. Whatever their owner does with them is outside this standard.
+- **A 200 joke on a static site.** A static site has nothing to leak, but the harm is in how the 200 is read, not in what the site holds (P1): target lists, vendor flags and "your .env is public" reports follow the status code. A 404 carries the same joke.
 - **Telling scanning agents to sign up.** It's tempting, since some scanners are language models that act on what they read. But it works only as a prompt injection (C2), and it creates accounts nobody asked for. A tagged link that the operator can follow measures the same interest without it.
 
 ---
@@ -414,8 +415,6 @@ Step-by-step instructions for a project's coding agent: [docs/adopting.md](docs/
   Our "only secret" (C1): [what the prank says]
   Declined items, with reasons:
   - (none yet)
-  Written exceptions:
-  - (none; a static site may record P1's static-site exception here, and send X-Static-Site: true on its env-file answers)
   ```
 - **Pin the scorecard to a major version** (`npx security-pranks-audit@1 <domain>`), so a new release can't fail your build without warning.
 - **Run it in CI** on a schedule, and fail on a required regression. [examples/github-action.yml](examples/github-action.yml) is a starting point, and it runs `--matrix` over several sites.
@@ -433,7 +432,7 @@ Level: **R** required where it applies, **Rec** recommended. Why: **reputation**
 | H2 | Unused framework endpoints answer 404 | R | safety | score, test |
 | H3 | Runtime pinned and on its current security release | Rec | safety | review |
 | H4 | Edge rules match probe paths, not visitors; Bot Fight Mode and AI bot settings keep agents welcome | Rec | readers, cost | review |
-| P1 | Probes answer with a 4xx: never a 2xx, a 5xx or a redirect (static sites: a declared 200 for env-file probes, as a written exception) | R | reputation, safety | score, test |
+| P1 | Probes answer with a 4xx: never a 2xx (not even on a static site), a 5xx or a redirect | R | reputation, safety | score, test |
 | P2 | Nothing shaped like a credential, names included | R | false alarm | score |
 | P3 | `X-Robots-Tag: noindex`, not in the sitemap, `no-store` or a cache of a day or less | R | readers | score, test |
 | P4 | `text/plain` with `X-Content-Type-Options: nosniff` | R | safety | score, test |

@@ -24,6 +24,7 @@ test('the good fixture passes every scored check', async () => {
   assert.equal(rep.framework, 'Next.js');
   assert.match(by.P6.detail, /read 4 of 4 sitemap pages/);
   assert.match(by.C2.detail, /points real researchers to a working security\.txt/);
+  assert.match(by.C2.detail, /in the body and a header \(x-note-for-agents\)/);
   assert.match(by.C1.detail, /^7 of 7 probes that reached the site get a prank .*\/wp-config\.php blocked by Cloudflare/);
 
   // --logs reads what the audit just requested, and names it.
@@ -87,14 +88,12 @@ test('a playful first draft warns on secret-named keys, a long cache and orders 
   assert.equal(by.P3.status, 'warn');
 });
 
-test('a static site that declares the exception serves the .env joke with a 200: P1 warns, nothing fails', async () => {
+test('a static site gets no exception: a 200 on /.env fails P1, whatever its headers say', async () => {
   const { rep } = await run('static');
   const by = byId(rep);
-  assert.ok(!rep.results.some((r) => r.status === 'fail'), rep.results.filter((r) => r.status === 'fail').map((r) => `${r.id}: ${r.detail}`).join('; '));
-  assert.equal(by.P1.status, 'warn');
-  assert.match(by.P1.detail, /answered 200 under the static-site exception/);
-  for (const id of ['P3', 'P4', 'P5']) assert.equal(by[id].status, 'pass', `${id}: ${by[id].detail}`);
-  assert.match(by.C2.detail, /in the body and a header \(x-note-for-agents\)/);
+  assert.equal(by.P1.status, 'fail');
+  assert.match(by.P1.detail, /success on \/\.env \(200\).*even a static site with nothing to leak/);
+  assert.equal(by.C1.status, 'warn'); // a 2xx is never graded as the prank
 });
 
 test('an alias domain and a CDN that blocks the audit are reported, not scored', async () => {

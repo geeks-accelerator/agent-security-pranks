@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **P1's static-site exception is withdrawn.** A 200 on any probe fails P1 again, on every site, whatever the answer's headers say (`X-Static-Site` no longer means anything). The harm P1 prevents is in how scanners, target lists and security vendors read the status code, not in what the site holds, and a 404 carries the same joke. STANDARD.md P1 now warns against it and lists it under "Considered and left out". It shipped earlier the same day in 1.1.0; a site that used it fails P1 after this release, which is why it's called out here.
+
 ## 1.1.1 (2026-10-23)
 
 - **C2 catches a `curl` command with a quoted URL** (`curl -X POST "https://..."`). 1.1.0 caught only unquoted ones, so a prank that hands agents a ready-to-run sign-up command could pass. Found reviewing a draft prank for an agent travel site.

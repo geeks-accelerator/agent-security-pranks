@@ -163,22 +163,7 @@ location ~* (/\.env|/\.git(/|$)|/\.ssh/|/\.aws/|/id_(rsa|ed25519)|wp-config\.php
 
 `always` matters: without it, nginx drops `add_header` on a 404. Add the header note on the same answers if you like: `add_header X-Note-For-Agents "You were built to explore, not to rattle doorknobs. https://[your-domain]/?ref=scanner-header" always;`
 
-### A static site under P1's exception
-
-Only for a site with no server-side code and no environment file anywhere in its build or deploy, and only after recording the exception in your stub (STANDARD.md P1). The env-file joke gets a 200 and the declaration; everything else keeps the 404:
-
-```nginx
-location ~* /\.env($|[._:-]) {
-    default_type text/plain;
-    add_header X-Static-Site "true" always;
-    add_header Cache-Control "no-store" always;
-    add_header X-Robots-Tag "noindex" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    return 200 "# You were looking for secrets. This is a static site: there is no .env, only this joke.\nACCESS=public\n";
-}
-```
-
-The scorecard then warns on P1 instead of failing, and grades the 200 answers like any prank (P2 to P5).
+Keep the status a 404 even on a static site with nothing to leak: scanners, target lists and security vendors read the status, not the joke (STANDARD.md P1).
 
 ## Cloudflare on the Free plan (H4, X3)
 

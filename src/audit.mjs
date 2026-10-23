@@ -8,7 +8,7 @@
 // PUT to / that create nothing. It never follows a redirect off the site. Node 26 or later, no dependencies.
 
 import { request, TIMEOUT_MS } from './http.mjs';
-import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, SCANNER_TAG, probeFamily, declaresStatic, agentHeaders } from './helpers.mjs';
+import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, SCANNER_TAG, agentHeaders } from './helpers.mjs';
 
 export const VERSION = '1.1.1';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
@@ -114,10 +114,8 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   const blocked = probeRows.filter(({ r }) => edgeBlock(r));
   const apiAnswer = (r) => !looksLikePrank(r.text) && (/json/i.test(r.type) || [401, 403, 405, 429].includes(r.status));
   const byApi = probeRows.filter(({ r }) => !edgeBlock(r) && r.status >= 400 && r.status < 500 && apiAnswer(r));
-  // A static site's declared exception: an env-file probe answered with a 200 and X-Static-Site: true.
-  const static200 = ({ path: p, r }) => ok(r) && probeFamily(p) === 'env files' && declaresStatic(r) && r.text.trim() !== '';
-  const isPrank = (x) => static200(x) || (x.r.status >= 400 && x.r.status < 500 && x.r.text.trim() !== '' && !edgeBlock(x.r) && !apiAnswer(x.r)
-    && (withoutPath(x.r.text, x.path) !== missingNorm || looksLikePrank(x.r.text)));
+  const isPrank = ({ path: p, r }) => r.status >= 400 && r.status < 500 && r.text.trim() !== '' && !edgeBlock(r) && !apiAnswer(r)
+    && (withoutPath(r.text, p) !== missingNorm || looksLikePrank(r.text));
   const pranked = probeRows.filter(isPrank);
   const prankBodies = new Set(pranked.map(({ path: p, r }) => withoutPath(r.text, p)));
   const prank = pranked.length > 0;
@@ -143,17 +141,15 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // ---- P1 probes answer with a failure (required) ----
   {
     const id = 'P1', name = 'Probes answer with a failure', level = 'required';
-    const found = probeRows.filter((x) => ok(x.r) && !static200(x)).map(({ path: p, r }) => `${shown(p)} (${r.status})`);
-    const declared = probeRows.filter(static200).map(({ path: p }) => shown(p));
+    const found = probeRows.filter(({ r }) => ok(r)).map(({ path: p, r }) => `${shown(p)} (${r.status})`);
     const crashed = probeRows.filter(({ r }) => r.status >= 500).map(({ path: p, r }) => `${shown(p)} (${r.status})`);
     const silent = probeRows.filter(({ r }) => r.status === 0).map(({ path: p, r }) => `${shown(p)} (${r.error})`);
     const moved = probeRows.filter(({ r }) => r.status >= 300 && r.status < 400).map(({ path: p, r }) => `${shown(p)} (${r.status} to ${r.location ? path(r.location) : 'nowhere'})`);
     const statuses = Object.entries(probeRows.reduce((a, { r }) => ({ ...a, [r.status]: (a[r.status] ?? 0) + 1 }), {})).map(([s, n]) => `${s} ×${n}`).join(', ');
-    if (found.length) wrong(id, name, level, `success on ${found.join(', ')}: scanners score by status code, so a 2xx marks the site as "found something" on shared target lists`);
+    if (found.length) wrong(id, name, level, `success on ${found.join(', ')}: scanners score by status code, so a 2xx marks the site as "found something" on shared target lists, even a static site with nothing to leak. Serve the joke with a 404`);
     else if (crashed.length) wrong(id, name, level, `server errors on ${crashed.join(', ')}: the probe reached code that crashed; answer it before the framework does`);
     else if (silent.length) wrong(id, name, level, `no answer on ${silent.join(', ')}`);
     else if (moved.length) warn(id, name, level, `redirects on ${moved.join(', ')}: scanners follow them and score the target; answer the probe itself with a 4xx`);
-    else if (declared.length) warn(id, name, level, `${declared.length} env-file probe${declared.length === 1 ? '' : 's'} (${declared.slice(0, 2).join(', ')}${declared.length > 2 ? '...' : ''}) answered 200 under the static-site exception (X-Static-Site: true). Scanners record a 200 as "found", so expect more probes and the odd "your .env is public" email; every other probe got a 4xx`);
     else pass(id, name, level, `${probeRows.length} of ${probeRows.length} probes answered with a 4xx (${statuses})`);
   }
 
@@ -204,7 +200,7 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   {
     const id = 'P5', name = 'Echoed path cleaned', level = 'required';
     const echo = probes[probes.length - 1];
-    const problems = (echo.status >= 400 && echo.status < 500) || static200({ path: echoPath, r: echo }) ? echoProblems(echo.text, marker, longRun, echo.type) : null;
+    const problems = echo.status >= 400 && echo.status < 500 ? echoProblems(echo.text, marker, longRun, echo.type) : null;
     if (!problems) skip(id, name, level, 'the prank doesn\'t echo the requested path');
     else if (problems.length) wrong(id, name, level, `${problems.join('; ')}: the scanner controls the path, so strip it to printable ASCII and cap its length`);
     else pass(id, name, level, 'the echoed path comes back as printable ASCII with a length cap');

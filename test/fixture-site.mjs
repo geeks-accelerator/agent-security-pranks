@@ -116,7 +116,8 @@ DATABASE_PASSWORD=feed-the-ferret-first
   return res.writeHead(404, { 'content-type': 'text/html' }).end('<!doctype html><html><head><title>Not found</title></head><body><h1>Not found</h1></body></html>');
 }
 
-// A static site under P1's written exception: env-file probes get the joke with a 200 and X-Static-Site: true.
+// A static site that serves the .env joke with a 200 and an X-Static-Site header. There's no exception
+// for static sites: P1 fails, whatever the header says.
 function staticSite(req, res, path) {
   if (!['GET', 'HEAD'].includes(req.method)) return res.writeHead(405, { allow: 'GET, HEAD', 'content-type': 'text/plain' }).end('Read-only.\n');
   if (/(^|\/|\.)\.?env($|[._\-:/]|\.[a-z0-9_-]+)/.test(decoded(path))) return res.writeHead(200, { ...PRANK_HEADERS, 'x-static-site': 'true' }).end(PRANK(decoded(path).replace(/[^\x20-\x7e]/g, '').slice(0, 100)));
