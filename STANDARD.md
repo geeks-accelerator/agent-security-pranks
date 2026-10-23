@@ -17,6 +17,7 @@
 - **Every item has a level:**
   - **Required**, because skipping it harms someone: your site (a 200 on `/.env` puts it on shared target lists), a stranger (a fake key someone has to chase), or your readers (a mistyped URL that shows the joke). Some required items apply only where they're true, such as P5 for a prank that echoes the path.
   - **Recommended**, when it fits the project: the prank itself, and the note for AI agents.
+- **A project may decline a recommended item,** such as the prank itself (C1). Record the decision and the reason in the stub (§10), and the item counts as met. Required items prevent harm, so they aren't declined; one that doesn't apply (H2 on a site with no framework) is skipped.
 - **The scorecard checks what's visible from outside.** It sends about 20 requests, a few at a time: eight probe paths, an echo test, a missing page, `GET`, `HEAD`, and an empty `POST` and `PUT` to `/`, the framework endpoint it detects, and up to 10 sitemap pages. It prints pass, warn or fail with the reason, and exits 1 when a required check fails, so it can gate a deploy. `--matrix <domains>` writes one status page for many sites.
 - **What it can't see** is listed under each item and in [§11](#11-the-checklist) as "review" or "test". Your own guard tests (T1) cover every route; the scorecard covers a sample.
 
