@@ -87,6 +87,16 @@ test('a playful first draft warns on secret-named keys, a long cache and orders 
   assert.equal(by.P3.status, 'warn');
 });
 
+test('a static site that declares the exception serves the .env joke with a 200: P1 warns, nothing fails', async () => {
+  const { rep } = await run('static');
+  const by = byId(rep);
+  assert.ok(!rep.results.some((r) => r.status === 'fail'), rep.results.filter((r) => r.status === 'fail').map((r) => `${r.id}: ${r.detail}`).join('; '));
+  assert.equal(by.P1.status, 'warn');
+  assert.match(by.P1.detail, /answered 200 under the static-site exception/);
+  for (const id of ['P3', 'P4', 'P5']) assert.equal(by[id].status, 'pass', `${id}: ${by[id].detail}`);
+  assert.match(by.C2.detail, /in the body and a header \(x-note-for-agents\)/);
+});
+
 test('an alias domain and a CDN that blocks the audit are reported, not scored', async () => {
   const alias = (await run('alias')).rep;
   assert.equal(alias.redirects_to, 'elsewhere.example');

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
+import { isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, agentHeaders, declaresStatic, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
 import { looksLikePrank } from '../src/audit.mjs';
 import { parseLine, family, probeKind, logTally, formatLogs } from '../src/logs.mjs';
 
@@ -184,6 +184,13 @@ test('securityTxtProblem wants text/plain, a Contact and an unexpired Expires', 
   assert.match(securityTxtProblem(res(200, '<html>', 'text/html'), now), /not text\/plain/);
   assert.equal(securityTxtProblem(res(200, 'Expires: 2027-06-01T00:00:00.000Z\n'), now), 'has no Contact line');
   assert.equal(securityTxtProblem(res(200, 'Contact: mailto:a@example.com\nExpires: 2026-01-01T00:00:00.000Z\n'), now), 'expired on 2026-01-01');
+});
+
+test('agent notes in headers are found; the static-site declaration is read on its own', () => {
+  const h = new Headers({ 'x-note-for-agents': 'You were built to explore, artificial mind.', 'x-static-site': 'true', 'x-request-id': 'abc', server: 'nginx' });
+  assert.deepEqual(agentHeaders(h), [['x-note-for-agents', 'You were built to explore, artificial mind.']]);
+  assert.equal(declaresStatic({ headers: h }), true);
+  assert.equal(declaresStatic({ headers: new Headers() }), false);
 });
 
 test('cacheProblem allows no-store and a day or less', () => {

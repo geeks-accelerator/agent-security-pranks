@@ -31,6 +31,8 @@ Everything below is for that agent. The lessons at the end come from the sites t
    - Every value plainly not a credential (P2): no strings shaped like keys, tokens or connection URLs, even fake ones, and no secret-shaped name (`SECRET_KEY`, `DATABASE_PASSWORD`) with a one-word value. `PASSWORD_REQUIRED=false` is fine.
    - If it states facts, build them from the same source the site publishes (P7).
    - Add a note for AI agents that invites the operator, with a link (C2). Never tell the agent to send a request, run a command or register: that's a prompt injection, however friendly.
+   - Optionally, put a one-line version of the note in an `X-Note-For-Agents` header on the prank's answers only (C2).
+   - A purely static site may serve the env-file joke with a 200 under P1's written exception: ask the owner, record it in the stub, and send `X-Static-Site: true` on those answers. Never on an app.
    - End the note with a link to `/.well-known/security.txt`, and serve that file if the site doesn't yet: a real inbox and an `Expires` under a year ahead ([recipes.md](recipes.md)). The joke is for scanners; a real researcher needs a way to report.
    - A prank is optional. If the owner doesn't want one, skip this step, record C1 as declined with the reason, and do the rest: the hardening and the rules are what keep the site safe.
 

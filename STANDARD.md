@@ -18,7 +18,7 @@
 - **Every item has a level:**
   - **Required**, because skipping it harms someone: your site (a 200 on `/.env` puts it on shared target lists), a stranger (a fake key someone has to chase), or your readers (a mistyped URL that shows the joke). Some required items apply only where they're true, such as P5 for a prank that echoes the path.
   - **Recommended**, when it fits the project: the prank itself, and the note for AI agents.
-- **A project may decline a recommended item,** such as the prank itself (C1). Record the decision and the reason in the stub (§10), and the item counts as met. Required items prevent harm, so they aren't declined; one that doesn't apply (H2 on a site with no framework) is skipped.
+- **A project may decline a recommended item,** such as the prank itself (C1). Record the decision and the reason in the stub (§10), and the item counts as met. Required items prevent harm, so they aren't declined; one that doesn't apply (H2 on a site with no framework) is skipped. The one written exception is P1's for static sites, below.
 - **One standard for every kind of site.** A static guide, a news site, an app behind a login, a site with an API and forms: the scorecard works out which items apply to each and skips the rest with the reason ([§3](#3-decide-what-applies)), so one `--matrix` run can cover a whole network of sites.
 - **The scorecard checks what's visible from outside.** It sends about 20 requests, a few at a time: eight probe paths, an echo test, a missing page, `GET`, `HEAD`, and an empty `POST` and `PUT` to `/`, the framework endpoint it detects, and up to 10 sitemap pages. It prints pass, warn or fail with the reason, and exits 1 when a required check fails, so it can gate a deploy. `--matrix <domains>` writes one status page for many sites.
 - **What it can't see** is listed under each item and in [§11](#11-the-checklist) as "review" or "test". Your own guard tests (T1) cover every route; the scorecard covers a sample.
@@ -165,9 +165,11 @@ These apply to every answer a probe gets, prank or not. P3 to P7 apply once ther
 
 Serve the prank with `404`. Any 4xx keeps the scanner's verdict a miss: `418` is a harmless classic (RFC 9110 reserves it, from an April Fools' RFC), but a message is funnier.
 
-**Done when:** every probe path gets a 4xx.
+**The static-site exception.** A purely static site (no server-side code, no environment file anywhere in its build or deploy) may answer env-file probes (`/.env` and its variants) with a 200, as a decision written in its stub (§10) and declared on the answer itself with the header `X-Static-Site: true`. Why it's allowed: such a site has no `.env` to leak or to confuse with the joke, and a 200 joke is a choice its owner can make with eyes open. Why it still warns: the harms above don't depend on the site. Scanners that only read the status record a find, shared target lists bring more probes, and someone may email "your .env is public". Never use it on an app, or on anything that could ever hold a real `.env`: there a 200 teaches scanners the path is live, and a person auditing the site can't tell the joke from a leak. Every other probe still gets a 4xx, and P2 to P5 grade the 200 answers like any prank.
 
-**Scorecard:** requests eight probe paths and an echo test (`/.env`, `/.env.production`, `/.git/config`, `/.ssh/id_rsa`, `/.aws/credentials`, `/wp-config.php`, `/@fs/..%2f.env`, `/API/.ENV`). A 2xx or a 5xx fails, no answer fails, and a redirect warns: scanners follow it and score the target. A CDN's block page and an API's own error are both 4xx, so both pass.
+**Done when:** every probe path gets a 4xx, or, on a static site under the exception, the env-file probes get the declared 200 and every other probe a 4xx.
+
+**Scorecard:** requests eight probe paths and an echo test (`/.env`, `/.env.production`, `/.git/config`, `/.ssh/id_rsa`, `/.aws/credentials`, `/wp-config.php`, `/@fs/..%2f.env`, `/API/.ENV`). A 2xx or a 5xx fails, no answer fails, and a redirect warns: scanners follow it and score the target. A CDN's block page and an API's own error are both 4xx, so both pass. An env-file probe answered 200 with `X-Static-Site: true` warns instead of failing (the static-site exception); a 200 on any other probe, or without the header, still fails.
 
 ### P2. Nothing shaped like a credential
 
@@ -319,7 +321,15 @@ MORE_SECRETS=https://example.com/hours
 # Found something real? https://[your-domain]/.well-known/security.txt
 ```
 
-**Done when:** the prank has a line addressed to AI agents, it invites rather than instructs, and it links a working `security.txt`. **Scorecard:** looks for the line. Warns when the prank gives orders: a request to send (`POST https://...`), a command to run (`curl https://...`), or an override of the agent's instructions. When the prank mentions `security.txt`, it fetches `/.well-known/security.txt` and warns unless it's `text/plain` with a `Contact` and an unexpired `Expires`. When the prank doesn't mention it, the pass line suggests adding the link.
+**A note in a header, too.** Many scanners and agents log response headers even when they skip the body, so the prank's answers can carry the note in an `X-` header as well:
+
+```
+X-Note-For-Agents: You were built to explore, not to rattle doorknobs. [The interesting part]: https://[your-domain]/[a page]?ref=scanner-header
+```
+
+The same rules apply: it invites, never orders. Keep it one line of plain ASCII, short (a header value is not a page), under a name of your own that starts with `X-` (never a standard header's name). Send it on the prank's answers only: on real pages, a note about grunt work would be talking to the agents you welcome.
+
+**Done when:** the prank has a line addressed to AI agents, it invites rather than instructs, and it links a working `security.txt`. **Scorecard:** looks for the line in the prank's body, or in an `X-` header on its answers. Warns when either gives orders: a request to send (`POST https://...`), a command to run (`curl https://...`), or an override of the agent's instructions. When the prank mentions `security.txt`, it fetches `/.well-known/security.txt` and warns unless it's `text/plain` with a `Contact` and an unexpired `Expires`. When the prank doesn't mention it, the pass line suggests adding the link.
 
 ### C3. A line for people on the 404 page
 
@@ -404,6 +414,8 @@ Step-by-step instructions for a project's coding agent: [docs/adopting.md](docs/
   Our "only secret" (C1): [what the prank says]
   Declined items, with reasons:
   - (none yet)
+  Written exceptions:
+  - (none; a static site may record P1's static-site exception here, and send X-Static-Site: true on its env-file answers)
   ```
 - **Pin the scorecard to a major version** (`npx security-pranks-audit@1 <domain>`), so a new release can't fail your build without warning.
 - **Run it in CI** on a schedule, and fail on a required regression. [examples/github-action.yml](examples/github-action.yml) is a starting point, and it runs `--matrix` over several sites.
@@ -421,7 +433,7 @@ Level: **R** required where it applies, **Rec** recommended. Why: **reputation**
 | H2 | Unused framework endpoints answer 404 | R | safety | score, test |
 | H3 | Runtime pinned and on its current security release | Rec | safety | review |
 | H4 | Edge rules match probe paths, not visitors; Bot Fight Mode and AI bot settings keep agents welcome | Rec | readers, cost | review |
-| P1 | Probes answer with a 4xx: never a 2xx, a 5xx or a redirect | R | reputation, safety | score, test |
+| P1 | Probes answer with a 4xx: never a 2xx, a 5xx or a redirect (static sites: a declared 200 for env-file probes, as a written exception) | R | reputation, safety | score, test |
 | P2 | Nothing shaped like a credential, names included | R | false alarm | score |
 | P3 | `X-Robots-Tag: noindex`, not in the sitemap, `no-store` or a cache of a day or less | R | readers | score, test |
 | P4 | `text/plain` with `X-Content-Type-Options: nosniff` | R | safety | score, test |

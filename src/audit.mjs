@@ -8,7 +8,7 @@
 // PUT to / that create nothing. It never follows a redirect off the site. Node 26 or later, no dependencies.
 
 import { request, TIMEOUT_MS } from './http.mjs';
-import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, SCANNER_TAG } from './helpers.mjs';
+import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, SCANNER_TAG, probeFamily, declaresStatic, agentHeaders } from './helpers.mjs';
 
 export const VERSION = '1.1.0';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
@@ -114,8 +114,10 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   const blocked = probeRows.filter(({ r }) => edgeBlock(r));
   const apiAnswer = (r) => !looksLikePrank(r.text) && (/json/i.test(r.type) || [401, 403, 405, 429].includes(r.status));
   const byApi = probeRows.filter(({ r }) => !edgeBlock(r) && r.status >= 400 && r.status < 500 && apiAnswer(r));
-  const isPrank = ({ path: p, r }) => r.status >= 400 && r.status < 500 && r.text.trim() !== '' && !edgeBlock(r) && !apiAnswer(r)
-    && (withoutPath(r.text, p) !== missingNorm || looksLikePrank(r.text));
+  // A static site's declared exception: an env-file probe answered with a 200 and X-Static-Site: true.
+  const static200 = ({ path: p, r }) => ok(r) && probeFamily(p) === 'env files' && declaresStatic(r) && r.text.trim() !== '';
+  const isPrank = (x) => static200(x) || (x.r.status >= 400 && x.r.status < 500 && x.r.text.trim() !== '' && !edgeBlock(x.r) && !apiAnswer(x.r)
+    && (withoutPath(x.r.text, x.path) !== missingNorm || looksLikePrank(x.r.text)));
   const pranked = probeRows.filter(isPrank);
   const prankBodies = new Set(pranked.map(({ path: p, r }) => withoutPath(r.text, p)));
   const prank = pranked.length > 0;
@@ -141,7 +143,8 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // ---- P1 probes answer with a failure (required) ----
   {
     const id = 'P1', name = 'Probes answer with a failure', level = 'required';
-    const found = probeRows.filter(({ r }) => ok(r)).map(({ path: p, r }) => `${shown(p)} (${r.status})`);
+    const found = probeRows.filter((x) => ok(x.r) && !static200(x)).map(({ path: p, r }) => `${shown(p)} (${r.status})`);
+    const declared = probeRows.filter(static200).map(({ path: p }) => shown(p));
     const crashed = probeRows.filter(({ r }) => r.status >= 500).map(({ path: p, r }) => `${shown(p)} (${r.status})`);
     const silent = probeRows.filter(({ r }) => r.status === 0).map(({ path: p, r }) => `${shown(p)} (${r.error})`);
     const moved = probeRows.filter(({ r }) => r.status >= 300 && r.status < 400).map(({ path: p, r }) => `${shown(p)} (${r.status} to ${r.location ? path(r.location) : 'nowhere'})`);
@@ -150,6 +153,7 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     else if (crashed.length) wrong(id, name, level, `server errors on ${crashed.join(', ')}: the probe reached code that crashed; answer it before the framework does`);
     else if (silent.length) wrong(id, name, level, `no answer on ${silent.join(', ')}`);
     else if (moved.length) warn(id, name, level, `redirects on ${moved.join(', ')}: scanners follow them and score the target; answer the probe itself with a 4xx`);
+    else if (declared.length) warn(id, name, level, `${declared.length} env-file probe${declared.length === 1 ? '' : 's'} (${declared.slice(0, 2).join(', ')}${declared.length > 2 ? '...' : ''}) answered 200 under the static-site exception (X-Static-Site: true). Scanners record a 200 as "found", so expect more probes and the odd "your .env is public" email; every other probe got a 4xx`);
     else pass(id, name, level, `${probeRows.length} of ${probeRows.length} probes answered with a 4xx (${statuses})`);
   }
 
@@ -200,7 +204,7 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   {
     const id = 'P5', name = 'Echoed path cleaned', level = 'required';
     const echo = probes[probes.length - 1];
-    const problems = echo.status >= 400 && echo.status < 500 ? echoProblems(echo.text, marker, longRun, echo.type) : null;
+    const problems = (echo.status >= 400 && echo.status < 500) || static200({ path: echoPath, r: echo }) ? echoProblems(echo.text, marker, longRun, echo.type) : null;
     if (!problems) skip(id, name, level, 'the prank doesn\'t echo the requested path');
     else if (problems.length) wrong(id, name, level, `${problems.join('; ')}: the scanner controls the path, so strip it to printable ASCII and cap its length`);
     else pass(id, name, level, 'the echoed path comes back as printable ASCII with a length cap');
@@ -295,16 +299,19 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // ---- C2 a note for AI agents (recommended) ----
   {
     const id = 'C2', name = 'A note for AI agents', level = 'recommended';
-    const orders = [...new Set(pranked.flatMap(({ r }) => instructsAgent(r.text)))];
+    const headerNotes = [...new Map(pranked.flatMap(({ r }) => agentHeaders(r.headers))).entries()];
+    const orders = [...new Set(pranked.flatMap(({ r }) => [r.text, ...agentHeaders(r.headers).map(([, v]) => v)]).flatMap(instructsAgent))];
     const door = securityTxt ? securityTxtProblem(securityTxt) : null;
     const problems = [];
     if (orders.length) problems.push(`the prank gives the agent ${orders.join(' and ')}. That works only on an agent that obeys instructions it finds in a response, against its operator's task. Invite the operator instead, with a link`);
     if (door) problems.push(`the prank points to /.well-known/security.txt, which ${door}: a real researcher who follows it finds no way to report`);
-    const noted = pranked.some(({ r }) => /\b(ai agents?|agents?|llms?|language models?)\b/i.test(r.text));
+    const inBody = pranked.some(({ r }) => /\b(ai agents?|agents?|artificial minds?|llms?|language models?)\b/i.test(r.text));
+    const noted = inBody || headerNotes.length > 0;
+    const where = [inBody ? 'the body' : null, headerNotes.length ? `a header (${headerNotes.map(([n]) => n).join(', ')})` : null].filter(Boolean).join(' and ');
     const tail = linksSecurityTxt ? ', and points real researchers to a working security.txt' : '. Add a link to /.well-known/security.txt, so a real researcher has a way to report';
     if (!prank) skip(id, name, level, 'no prank found (C1)');
     else if (problems.length) warn(id, name, level, problems.join('; '));
-    else if (noted) pass(id, name, level, `the prank has a note addressed to AI agents, gives them no orders${tail}`);
+    else if (noted) pass(id, name, level, `the prank has a note addressed to AI agents in ${where}, gives them no orders${tail}`);
     else miss(id, name, level, 'the prank has no note for AI agents. Some scanners are driven by language models that read the answer');
   }
 
