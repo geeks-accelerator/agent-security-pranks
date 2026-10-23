@@ -47,7 +47,10 @@ export function probeFamily(pathname) {
  * reports them on their own, with that caveat. Matched against the decoded, lowercased path.
  */
 export const OTHER_PROBE_FAMILIES = [
+  ['dev-server file reads', /\/@fs\/|\/__vite|\/api\/fs\/read/],
+  ['other version-control and system files', /\/\.(svn|hg)(\/|$)|\/\.gitconfig$|\/\.ds_store$|\/\.bash_history$/],
   ['Spring actuator and heap dumps', /\/actuator(\/|$)|heapdump|\/jolokia(\/|$)/],
+  ['infrastructure endpoints', /\/cgi-bin\/|\/k8s(\/|$)|\/alertmanager(\/|$)|\/payload\.config\.js$|\/\.kube\//],
   ['framework logs and debug pages', /laravel\.log$|\/storage\/logs\/|\/_profiler(\/|$)|\/telescope(\/|$)|phpinfo|\/debug\.log$|\/server-status$|\/elmah\.axd$/],
   ['backups and dumps', /\.(sql|bak|old|swp)$|\/(backup|www|site|db|database|dump)\.(zip|tar\.gz|tgz|rar|7z|sql)$|\/backups?(\/|$)/],
   ['WordPress and PHP', /\/wp-(admin|login|content|includes)|xmlrpc\.php|\.php($|\/)/],

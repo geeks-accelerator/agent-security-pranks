@@ -6,6 +6,8 @@
 
 **Check how your site answers the bots and agents hunting it for secrets:** `/.env`, `/.git/config`, SSH keys, `/.aws/credentials`, `wp-config.php`. A standard for refusing what your site never needs and answering the rest with a harmless joke, and a command-line audit that probes a live site the way scanners do and checks every answer. No account, no API key, no dependencies.
 
+It's for websites you run and manage, that welcome AI agents and crawlers and are tired of the scanners. It answers what a request asks for, never who it claims to be: nothing here blocks or challenges an agent, verified or not.
+
 ```
 npx security-pranks-audit example.com
 ```
@@ -38,10 +40,11 @@ This repo holds:
 
 ## Why this one
 
+- **Welcoming by design.** The real AI crawlers don't probe: across one owner's sites, none of the probes came from a verified bot, and the biggest scanner wore twenty AI-crawler names as a disguise. So nothing here keys on names or verification (X3). It answers the request for `/.env`, whoever sends it.
 - **Built from logs.** On a network of eleven small sites, about 64% of requests were 404s, nearly all of them probes: 1,806 requests for secrets in 16 hours. Each item says what harm it prevents, and the claims cite RFCs and official docs with dates.
 - **It checks that the joke can't backfire.** A prank served with a 200 puts your domain on shared target lists (P1). A fake key in it is a false alarm for a stranger to chase (P2). A prank that leaks into ordinary 404s confuses your readers (P8). The audit fails each of these.
 - **Hardening first, joke second.** Refusing unused methods (H1) and framework endpoints (H2) is what keeps the site safe. A prank is optional; a site with none can pass every required check.
-- **One tool for every kind of site.** Static guides, apps behind a login, sites with an API and forms, alias domains. It detects the framework, the prank, an API's own error answers, a CDN's block page, an echoed path and an alias redirect, and skips what doesn't apply with the reason. A site that's safe with no prank at all passes every required check.
+- **One tool for every kind of site.** Static guides, news sites, apps behind a login, sites with an API and forms. It detects the framework, the prank, an API's own error answers, a CDN's block page and an echoed path, and skips what doesn't apply with the reason. A redirect-only domain is reported as out of scope rather than scored. A site that's safe with no prank at all passes every required check.
 - **It can't be turned against you.** It requests only the site you name, never follows a redirect off it, and caps every answer at 256 KB and 10 seconds, so a site that answers with a zip bomb or a tarpit can't hurt the machine running it.
 - **Built for many sites.** `--matrix` scores a whole network into one status page, `--compare` shows what changed since last month, `--base` scores a build before it ships, and `--logs` counts probes before and after.
 
@@ -73,7 +76,7 @@ security-pranks-audit --logs <access-log> [--json]
 | `--base url` | score a local or preview build as the domain before you deploy (`--base http://localhost:3000`) |
 | `--compare file` | list what changed since a previous run: a status page from `--matrix` or a saved `--json` report |
 | `--matrix` | score several sites, three at a time, and print one markdown status page |
-| `--logs file` | count probes in an exported access log (combined log format, or JSON lines from Cloudflare, Vercel or Railway): secret files, actuator and heap dumps, framework logs, backups, WordPress and PHP, unused methods. By kind, status and client family, with the busiest address's share of traffic, any probe that got a 2xx or a 5xx, and the prank's tagged links that came back. It prints counts, never addresses |
+| `--logs file` | count probes in an exported access log (combined log format, or JSON lines from Cloudflare, Vercel or Railway): secret files, dev-server file reads, actuator and heap dumps, framework logs, backups, WordPress and PHP, infrastructure endpoints, unused methods. By kind, status and client family, with the busiest address's share of traffic, probes sent under well-known crawler names, any probe that got a 2xx or a 5xx, and the prank's tagged links that came back. It prints counts, never addresses |
 
 From a clone, run `node bin/security-pranks-audit.mjs example.com`.
 
@@ -81,7 +84,7 @@ To check fixes before they ship, score a local build: `npx security-pranks-audit
 
 ## Score all your sites
 
-`--matrix` is built for a network of sites: one run, one status page with a column per site and a "what to fix" list for each. Sites with and without an API, with and without a prank, sit side by side: each is scored on what applies to it. An alias domain shows "redirects to" its target, and a site whose CDN blocks the audit says so instead of scoring the block page.
+`--matrix` is built for a network of sites: one run, one status page with a column per site and a "what to fix" list for each. Sites with and without an API, with and without a prank, sit side by side: each is scored on what applies to it. A redirect-only domain in the list shows "redirects to" its target (it's out of scope), and a site whose CDN blocks the audit says so instead of scoring the block page.
 
 ```
 npx security-pranks-audit@1 --matrix $(cat sites.txt) > docs/security-pranks-status.md

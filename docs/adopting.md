@@ -6,6 +6,8 @@ To switch a project over, give its coding agent one line:
 
 Everything below is for that agent. The lessons at the end come from the sites that switched over first.
 
+**Scope:** a website the owner runs and manages, where you can change how it answers. A parked or redirect-only domain has nothing to answer with: skip it. **Values:** the site welcomes every AI agent and crawler, verified or not. Nothing you add may block, challenge or slow a visitor for its user agent, its claimed name or its verified status (X3). Answer what a request asks for.
+
 1. **Score the live site:** `npx security-pranks-audit@1 <your-domain>`, on Node 26 or later. Its requests look like the scanners it checks for (that's the point), so run it only against the project's own site. Exit code 1 means a required check failed. Most sites start with H1 or H2 failing and no prank (C1); a site that answers a probe with a 200 or a 5xx (P1) fixes that first.
    - If the owner can export a day of request logs (from the host or CDN: combined log format, or JSON lines from Cloudflare, Vercel or Railway), run `npx security-pranks-audit@1 --logs <file>` too. Those are the before numbers (T2). It prints counts only; never paste addresses anywhere. Don't wait for logs to start.
 
@@ -42,9 +44,11 @@ Everything below is for that agent. The lessons at the end come from the sites t
 
 8. **Verify and ship:** build and test, and score the local build before you deploy: `npx security-pranks-audit@1 <your-domain> --base http://localhost:<port>`. After the deploy, run `npx security-pranks-audit@1 <your-domain> --compare docs/security-pranks-status.md` against production to see what changed, regenerate the status page, and commit. Compare item by item, not just the totals: adding a prank makes P3, P4 and C2 apply.
 
-9. **Ask the owner before deploying,** and before changing CDN, firewall or DNS settings. Each is live for every visitor at once.
+9. **If the site is behind Cloudflare or another CDN (H4),** check that its bot settings match the site's welcome: Bot Fight Mode off, and the AI bot settings (Search, Agent, Training) set to Allow if the site welcomes them. Optionally propose the edge rule from [recipes.md](recipes.md) for probe families the prank doesn't answer, tested against the sitemap first.
 
-10. **A day after the deploy,** if you have logs, run `--logs` on a day of them again. Scanner 5xx should be zero, every probe still a failure, and nothing readers use changed.
+10. **Ask the owner before deploying,** and before changing CDN, firewall or DNS settings. Each is live for every visitor at once.
+
+11. **A day after the deploy,** if you have logs, run `--logs` on a day of them again. Scanner 5xx should be zero, every probe still a failure, and nothing readers use changed.
 
 When you're done, report the `--compare` output (what changed), the score before and after, the prank text, the `--logs` numbers before and after if you had logs, and anything you declined.
 

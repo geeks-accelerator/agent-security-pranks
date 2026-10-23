@@ -3,12 +3,17 @@
 
 import { probeFamily, knownProbe, OTHER_PROBE_FAMILIES, FRAMEWORK_ENDPOINTS, SCANNER_TAG } from './helpers.mjs';
 
+// Well-known crawler and assistant names. A log can't verify them, but real crawlers don't probe:
+// a probe under one of these names is a scanner wearing it (STANDARD.md §2).
+export const CRAWLER_NAMES = /gptbot|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|perplexitybot|perplexity-user|google-extended|meta-externalagent|meta-externalfetcher|bytespider|ccbot|amazonbot|deepseekbot|grokbot|kimibot|duckassistbot|youbot|cohere-ai|mistralai-user|qwen|chatglm|hunyuan/i;
+const SEARCH_NAMES = /googlebot|bingbot|applebot|duckduckbot|yandexbot|baiduspider/i;
+
 // Client families, checked in order: the first match wins. A user agent is a claim, not proof:
-// many probes claim to be Googlebot, so search crawlers are reported as "claims to be".
+// many probes claim to be Googlebot or GPTBot, so named crawlers are reported as "claims to be".
 export const FAMILIES = [
   ['This audit (security-pranks-audit)', /^security-pranks-audit\//i],
   ['Claims to be a search crawler', /googlebot|bingbot|applebot|duckduckbot|yandexbot|baiduspider/i],
-  ['AI crawlers and assistants', /gptbot|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|perplexitybot|perplexity-user|google-extended|meta-externalagent|bytespider|ccbot|amazonbot/i],
+  ['Claims to be an AI crawler or assistant', CRAWLER_NAMES],
   ['Scripts', /^(curl|wget|python|node|undici|axios|go-http-client|okhttp|java\/|libwww|httpie|deno|bun\/|ruby|php|fasthttp)/i],
   ['Scanners that name themselves', /zgrab|nuclei|nmap|masscan|nikto|sqlmap|wpscan|gobuster|dirbuster|ffuf|censys|shodan|internet-measurement|expanse|leakix/i],
   ['Headless browsers', /headlesschrome|phantomjs|puppeteer|playwright|selenium/i],
@@ -74,7 +79,8 @@ const share = (n, of) => (of ? Math.round((n / of) * 1000) / 10 : 0);
 
 /** Tally lines one at a time; result() gives the report. Addresses are counted, never kept in the report. */
 export function logTally() {
-  let lines = 0, parsed = 0, notFound = 0, probeTotal = 0, otherMisses = 0, noUa = 0;
+  let lines = 0, parsed = 0, notFound = 0, probeTotal = 0, otherMisses = 0, noUa = 0, disguised = 0;
+  const disguises = new Map(); // claimed crawler name -> probes sent under it
   const statuses = new Map(); // class -> count, all traffic
   const kinds = new Map(); // kind -> { requests, statuses: Map, families: Map }
   const probeAddrs = new Set();
@@ -105,6 +111,8 @@ export function logTally() {
       if (!kind) { if (r.status >= 400 && r.status < 500) otherMisses++; return; }
       probeTotal++;
       if (r.addr) probeAddrs.add(r.addr);
+      const named = r.ua.match(CRAWLER_NAMES)?.[0] ?? r.ua.match(SEARCH_NAMES)?.[0];
+      if (named) { disguised++; disguises.set(named.toLowerCase(), (disguises.get(named.toLowerCase()) ?? 0) + 1); }
       if (!kinds.has(kind)) kinds.set(kind, { requests: 0, statuses: new Map(), families: new Map() });
       const k = kinds.get(kind);
       k.requests++;
@@ -135,6 +143,7 @@ export function logTally() {
         kinds: [...kinds].map(([kind, k]) => ({ kind, requests: k.requests, may_include_real_traffic: MAYBE_REAL.has(kind), statuses: sorted(k.statuses), families: sorted(k.families) })).sort((a, b) => b.requests - a.requests),
         succeeded_or_crashed: [...hits].map(([key, n]) => ({ request: key, count: n })).sort((a, b) => b.count - a.count),
         prank_links_followed: sorted(tags),
+        probes_under_crawler_names: { requests: disguised, names: sorted(disguises) },
       };
     },
   };
@@ -164,6 +173,8 @@ export function formatLogs(rep) {
     for (const h of rep.succeeded_or_crashed.slice(0, 20)) out.push(`  ${String(h.count).padStart(6)}  ${h.request}`);
     if (rep.succeeded_or_crashed.length > 20) out.push(`  and ${rep.succeeded_or_crashed.length - 20} more`);
   } else out.push('Every probe got something other than a 2xx or a 5xx.');
+  const d = rep.probes_under_crawler_names;
+  if (d.requests) out.push('', `Probes sent under a well-known crawler's name: ${d.requests} (${Object.entries(d.names).slice(0, 8).map(([n, c]) => `${n} ${c}`).join(', ')}${Object.keys(d.names).length > 8 ? ', ...' : ''}). Real crawlers don't probe: these are scanners wearing the name. Answer the behavior, not the name (X3).`);
   const followed = Object.entries(rep.prank_links_followed);
   if (followed.length) out.push('', 'Prank links followed (C1, T2):', ...followed.map(([t, n]) => `  ${String(n).padStart(6)}  ${t}`));
   out.push('', 'Run it on a day of logs before you ship and again after: scanner 5xx should drop to zero, and every probe should stay a failure (STANDARD.md, T2).');

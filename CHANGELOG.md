@@ -2,7 +2,7 @@
 
 ## 1.1.0 (unreleased)
 
-Fits every kind of site one owner runs (static guides, apps with an API and forms, sites behind a login, alias domains), and adds what a day of animalhouse.ai's logs and its agent's first draft of per-family pranks taught. No check newly fails a site that passed 1.0.0; some can newly warn, so a recommended or required score can drop. `@1` pins keep working.
+Fits every kind of website one owner runs and manages (static guides, news sites, apps with an API and forms, sites behind a login), and adds what a day of animalhouse.ai's logs and its agent's first draft of per-family pranks taught. No check newly fails a site that passed 1.0.0; some can newly warn, so a recommended or required score can drop. `@1` pins keep working.
 
 **Can newly warn (scores can drop):**
 - **P2** warns on a secret-shaped name (`SECRET_KEY`, `DATABASE_PASSWORD`, `ADMIN_TOKEN`) given a one-word value. A person reads it as a joke; generic secret scanners key on the name and extract it.
@@ -14,12 +14,16 @@ Fits every kind of site one owner runs (static guides, apps with an API and form
 - **H1 passes any 4xx refusal** of `POST /` and `PUT /`, not only a 405: a site with forms or an API often answers 404. A 2xx or 3xx warns; a 5xx still fails. A 401 homepage counts as answering, for sites behind a login.
 - **An API's own errors aren't graded as the prank.** A JSON answer, or a 401, 403, 405 or 429, on a probe like `/API/.ENV` is the API answering. It passes P1 and is left out of P3, P4 and C1's count.
 - **H2 looks for `next/image` on the sitemap pages it reads,** not only the homepage, and fails only when it has read every sitemap page; on a larger site it warns. At animalhouse.ai, `/how-it-works` uses the optimizer while the homepage doesn't, and 1.0.0 failed it wrongly.
-- **An alias domain** whose homepage redirects to another site is reported as "redirects to" its target instead of scored. **A CDN that blocks the audit itself** is reported as a warning naming the CDN, instead of scoring its block page.
+- **A redirect-only domain** is reported as "redirects to" its target and out of scope, instead of scored. **A CDN that blocks the audit itself** is reported as a warning naming the CDN, instead of scoring its block page.
 
 **New:**
+- **Scope and values, stated:** websites you run and manage (parked and redirect-only domains are out of scope), and a site that welcomes every AI agent and crawler, verified or not. Principle 8 ("welcome every mind; answer the behavior") and **X3** (required, review): never block or challenge by user agent, crawler name or verified status.
+- **H4** (recommended, review): edge rules that match probe paths, never visitors, with a Cloudflare Free plan recipe; Bot Fight Mode off and AI bot settings set to Allow on sites that welcome agents. Challenging unverified crawler names is in "Considered and left out", with the reason.
+- **STANDARD.md §2:** a week across one owner's Cloudflare sites ("Bots in AI clothing"): no verified crawler probed, and the biggest scanner wore twenty AI-crawler names.
+- **`--logs`** counts probes sent under well-known crawler names (real crawlers don't probe, so these are disguises), reports claimed AI crawlers as "claims to be", and adds dev-server file reads, other version-control files and infrastructure endpoints as families.
 - **C1** reports how many different replies the prank has and whether they carry a tagged link (`?ref=scanner-env`).
 - **C4** (review): a public page of misses, with its rules.
-- **`--logs`** counts actuator and heap dumps, framework logs, backups, and WordPress and PHP as probe families; splits traffic into probes, other misses and the rest; reports the busiest address's share of traffic and how many addresses sent almost only probes (counts, never addresses); and counts requests that arrived through the prank's tagged links.
+- **`--logs`** also counts actuator and heap dumps, framework logs, backups, and WordPress and PHP as probe families; splits traffic into probes, other misses and the rest; reports the busiest address's share of traffic and how many addresses sent almost only probes (counts, never addresses); and counts requests that arrived through the prank's tagged links.
 - **STANDARD.md:** a §3 table for each kind of site, animalhouse.ai's day of logs in §2, one reply per probe family and tagged links (C1), "invite the operator, never instruct the agent" (C2), and the caching rule (P3). Recipes for exempting real content prefixes, per-family replies and the page of misses.
 
 ## 1.0.0 (2026-10-23)

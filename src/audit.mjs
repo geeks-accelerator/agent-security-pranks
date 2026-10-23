@@ -78,7 +78,7 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // A domain that only redirects to another site (an alias, an old name) has nothing of its own
   // to score: its probes go wherever its redirect goes.
   if (home.status >= 300 && home.status < 400 && home.location && !onSite(home.location)) {
-    skip('P1', 'Probes answer with a failure', 'required', `${origin}/ redirects to ${new URL(home.location).host}: audit that domain instead`);
+    skip('P1', 'Probes answer with a failure', 'required', `${origin}/ redirects to ${new URL(home.location).host}: a redirect-only domain is out of scope, so audit that site instead`);
     return finish({ origin, prank: false, framework: null, redirects_to: new URL(home.location).host });
   }
   // A CDN that blocks the audit's own requests hides the site; say so instead of scoring the block page.

@@ -1,6 +1,7 @@
 # Agent Security Pranks Standard
 
-**What it is:** how a small public site answers the bots and agents that hunt it for leaked secrets: refuse what the site never needs, and, if you like, answer with a joke that costs nothing, leaks nothing and can't be mistaken for a find. Built from [the Scanner Prank Playbook](docs/scanner-prank-playbook.md), a deployment on a network of civic-guide sites, and from a day of logs at an app with an API (animalhouse.ai), and checked against the specs ([§12](#12-specs-and-sources)).
+**What it is:** how a small public site answers the bots and agents that hunt it for leaked secrets: refuse what the site never needs, and, if you like, answer with a joke that costs nothing, leaks nothing and can't be mistaken for a find. It welcomes every other visitor, AI agents and crawlers included, verified or not: it answers what a request asks for, never who it claims to be.
+**Scope:** websites you run and manage, where you control the answers (middleware, a proxy, a server, or the host's edge functions). A parked or redirect-only domain has no site to answer with, so it's out of scope. Built from [the Scanner Prank Playbook](docs/scanner-prank-playbook.md), a deployment on a network of civic-guide sites, and from a day of logs at an app with an API (animalhouse.ai), and checked against the specs ([§12](#12-specs-and-sources)).
 **Scorecard:** `npx security-pranks-audit <domain>` (see the [README](README.md))
 **Last verified:** 2026-10-23
 
@@ -18,7 +19,7 @@
   - **Required**, because skipping it harms someone: your site (a 200 on `/.env` puts it on shared target lists), a stranger (a fake key someone has to chase), or your readers (a mistyped URL that shows the joke). Some required items apply only where they're true, such as P5 for a prank that echoes the path.
   - **Recommended**, when it fits the project: the prank itself, and the note for AI agents.
 - **A project may decline a recommended item,** such as the prank itself (C1). Record the decision and the reason in the stub (§10), and the item counts as met. Required items prevent harm, so they aren't declined; one that doesn't apply (H2 on a site with no framework) is skipped.
-- **One standard for every kind of site.** A static guide, an app behind a login, a site with an API and forms, an alias domain: the scorecard works out which items apply to each and skips the rest with the reason ([§3](#3-decide-what-applies)), so one `--matrix` run can cover a whole network of sites.
+- **One standard for every kind of site.** A static guide, a news site, an app behind a login, a site with an API and forms: the scorecard works out which items apply to each and skips the rest with the reason ([§3](#3-decide-what-applies)), so one `--matrix` run can cover a whole network of sites.
 - **The scorecard checks what's visible from outside.** It sends about 20 requests, a few at a time: eight probe paths, an echo test, a missing page, `GET`, `HEAD`, and an empty `POST` and `PUT` to `/`, the framework endpoint it detects, and up to 10 sitemap pages. It prints pass, warn or fail with the reason, and exits 1 when a required check fails, so it can gate a deploy. `--matrix <domains>` writes one status page for many sites.
 - **What it can't see** is listed under each item and in [§11](#11-the-checklist) as "review" or "test". Your own guard tests (T1) cover every route; the scorecard covers a sample.
 
@@ -33,6 +34,7 @@
 5. **No retaliation.** Nothing that costs the visitor, holds its connection or points it at someone else. Anything that harms the visitor stops being a prank, and your hosting bill pays for tarpits.
 6. **Every rule names the harm it prevents.** A restriction added because it feels safe spreads to every project that copies the wording. If an item here can't say what goes wrong without it, it doesn't belong.
 7. **Prove each check can fail.** A check that has never failed has not been tested. Run each against the built server once with the feature turned off.
+8. **Welcome every mind; answer the behavior.** AI agents, assistants fetching for a person, crawlers new and old, verified or not, are welcome. Nothing in this standard blocks, challenges or slows a visitor for who it says it is. It answers what a request asks for: no welcome visitor asks for `/.env`. Names are free to wear (the busiest scanner in §2 wore twenty), so a rule that keys on them breaks the agents you want and barely slows the scanners.
 
 ---
 
@@ -71,6 +73,21 @@ What it adds:
 - **One address can be most of it.** A rate limit at the CDN for an address like that removes most of the noise; the rest can get the joke.
 - **Some scanners are language models that read the answer,** which is why a prank can speak to them (C2), and why it must not give them orders.
 
+A week across one owner's sites on Cloudflare's Free plan (October 16 to 23, 2026, Cloudflare's sampled counts; "Bots in AI clothing"). The managed sites:
+
+| Sites | Domains | Requests | Probes | Verified AI crawlers and assistants |
+|---|---|---|---|---|
+| Local news | 15 | 3.14M | 1.3% | 5.6% |
+| AI-agent platforms | 13 | 1.68M | 5.1% | 7.1% |
+| Small company and content sites | 12 | 190k | 28.3% | 4.0% |
+
+What it adds:
+
+- **The real AI crawlers weren't probing.** None of the high-confidence probes came from a bot Cloudflare could verify. The problem is scanners, not AI.
+- **The biggest scanner wore AI-crawler names.** It rotated through about twenty (GPTBot, ClaudeBot, DeepSeekBot, GrokBot, KimiBot and more), each almost exactly 12,000 times, hunting `.env` files in AI-app folders (`/agents/.env`, `/chatbot/.env`) and dev-server file reads (`/@fs/`, `/__vite_rsc_findSourceMapURL`). A name says nothing about who's asking (principle 8). `--logs` counts probes sent under well-known crawler names.
+- **The smaller the site, the bigger the share of probes.** Scanners find new domains from public certificate logs within hours.
+- **A few machines send most of it.** Ten addresses sent 43% of the week's probes. None got a 2xx.
+
 Re-measure with `--logs` and add dated results here when a site's numbers change what an item should say.
 
 ---
@@ -79,17 +96,18 @@ Re-measure with `--logs` and add dated results here when a site's numbers change
 
 | Your site | What changes |
 |---|---|
-| Any public site | H1, H3, P1, P2, P8, X1, X2, T1 and T2 apply. A site that's safe with no prank at all passes every required check. |
+| Any site you run | H1, H3, P1, P2, P8, X1, X2, X3, T1 and T2 apply. A site that's safe with no prank at all passes every required check. |
 | Read-only (a guide, a blog, a marketing site) | H1: every method but `GET` and `HEAD` gets 405 with `Allow: GET, HEAD`. |
 | Takes forms or has an API | H1: each route refuses the methods it doesn't use (a 405 or a 404), and none answers with a 5xx. The API's own errors are fine as they are: a JSON 404, or a 401 for a missing key, on `/api/.env` is the API answering, not a prank, and the prank rules don't grade it. Exempt the API's prefix from the prank (P6). |
 | Behind a login | A 401 on the homepage still counts as answering. The probes are checked the same way. |
 | A static site on a host or CDN | The guard goes in the host's edge middleware or functions ([docs/adopting.md](docs/adopting.md), step 2). |
 | Runs a framework with an always-on endpoint (Next.js `/_next/image`) | H2. |
 | Serves a prank | C1, C2, C3, P3, P4, P6; P7 if it states facts; P5 if it echoes the path; C4 if it publishes a page of misses. |
-| An alias domain that redirects to another site | Nothing of its own to score: audit the target. The scorecard says so instead of scoring the redirect. |
+| A parked or redirect-only domain | Out of scope: there's no site to answer with. The scorecard reports the redirect instead of scoring it; audit the site it points to. |
+| Behind Cloudflare or another CDN | H4: optional edge rules that match probe paths, never visitor identity, and AI bot settings that keep agents welcome. |
 | One of many sites run by one owner | One shared module for the pattern and the replies, so a fix reaches them all, and one `--matrix` status page for all of them. |
 
-The scorecard works out most of this itself: it detects a framework from the homepage, a prank from the probe answers, an API's own answers by their JSON or auth status, a CDN's block page, an echo from a marker in the path, and an alias from the homepage's redirect. It skips what doesn't apply, with the reason.
+The scorecard works out most of this itself: it detects a framework from the homepage, a prank from the probe answers, an API's own answers by their JSON or auth status, a CDN's block page, and an echo from a marker in the path. It reports a redirect-only domain as out of scope. It skips what doesn't apply, with the reason.
 
 ---
 
@@ -122,6 +140,18 @@ Answer `404` for the endpoint in middleware or the proxy, before the framework. 
 Pin the runtime in the project (`engines`, `.nvmrc`, `.python-version`, the host's setting) to a version on its current security release, and update it when one ships.
 
 **Done when:** the version is pinned in the repo and current. **Checked in review.**
+
+### H4. Edge rules match behavior, and keep agents welcome
+
+**Level:** recommended, for a site behind a CDN. **Why:** a CDN rule can answer probes before they reach your server, which saves work when one address sends thousands. But a CDN's bot settings can also turn away the agents you welcome, quietly.
+
+On Cloudflare's Free plan (5 custom rules, no regex, 1 rate limiting rule, Bot Fight Mode as an on/off switch):
+- **Optionally, block probe families you don't prank.** A custom rule that blocks paths no visitor ever needs (`.php` on a site without PHP, `/wp-` paths, `/cgi-bin/`, `/actuator`) costs no welcome visitor anything. Leave out the families your prank answers: a blocked request never reaches the prank. Match on `starts_with` and `ends_with`, or `contains` with a full segment (`"/.git/"`), not short fragments: `contains "/wp-"` also blocks an article slug like `/news/wp-engine-outage`. Exempt your real content and API prefixes, and test the rule against every sitemap URL first. [docs/recipes.md](docs/recipes.md) has the rule.
+- **Keep Bot Fight Mode off on a site that welcomes agents.** On the Free plan it can't be skipped by any rule, so it challenges scripts, headless browsers and MCP clients along with the scanners.
+- **Check the AI bot settings.** Cloudflare's AI Crawl Control groups AI bots as Search, Agent and Training, and its defaults can block some of them, for example agents on pages with ads. Set each to what you mean. For a site that welcomes agents, that's Allow.
+- **Don't challenge or block by user agent or verified status (X3).** Unverified isn't the same as unwelcome.
+
+**Done when:** any edge rule added for scanners matches paths only, has been tested against the sitemap, and leaves the prank's paths alone; Bot Fight Mode and the AI bot settings match what the site welcomes. **Checked in review.**
 
 ---
 
@@ -228,6 +258,14 @@ No zip bombs, no tarpits, no slow drips, no redirects that send bots to someone 
 Use canary tokens on purpose, as their own project, not as a prank.
 
 **Done when:** no probe answer is a canary. **Checked in review;** a canary served as a prank also fails P1 or P2.
+
+### X3. Never block by who a visitor claims to be
+
+**Level:** required. **Why:** a name is free to wear. The busiest scanner in §2 rotated through twenty AI-crawler names, while the real, verified crawlers didn't probe at all. A rule that challenges a name, or "unverified" traffic, breaks visitors the site wants: an assistant fetching a page for a person, a new crawler that isn't on anyone's verified list yet, an agent built last week. It barely slows the scanner, which changes its name.
+
+Answer what a request asks for. The guard, the prank and any edge rule you add for this standard match paths and methods only, never the user agent or a verified-bot flag.
+
+**Done when:** no rule added for this standard matches on user agent, claimed crawler name or verified-bot status. **Checked in review.**
 
 ---
 
@@ -340,6 +378,9 @@ Read a day of request logs before you ship: count 5xx responses, probe paths, an
 - **Canary tokens as a joke.** A legitimate tool on its own terms, but it needs a 200 and a credential-shaped value, which breaks P1 and P2 (X2).
 - **Blocking scanners by address or user agent.** Addresses rotate and user agents lie (§2). Blocking belongs to the CDN or firewall, and it's no substitute for answering probes safely; this standard doesn't require it.
 - **Pranks that test how an AI agent behaves** (hidden instructions to see whether an agent follows them). They score the agent, not the site, so they don't fit a site scorecard. C2 is the part that belongs here: a note that invites and asks nothing harmful.
+- **Challenging crawler names that fail verification.** Cloudflare's Free plan can express it (`not cf.client.bot` with a user-agent match), and it does catch the scanners that wear crawler names. It also challenges real assistants and new crawlers whenever verification misses them, and everything that isn't on a verified list. This standard welcomes them (principle 8, X3), and blocking the probe paths (H4) stops the same scanners without asking anyone who they are.
+- **Bot Fight Mode on a site that welcomes agents.** On the Free plan it can't be skipped, so it challenges agents and scripts along with scanners (H4).
+- **Parked and redirect-only domains.** There's no site to answer with, so nothing here applies. Whatever their owner does with them is outside this standard.
 - **Telling scanning agents to sign up.** It's tempting, since some scanners are language models that act on what they read. But it works only as a prompt injection (C2), and it creates accounts nobody asked for. A tagged link that the operator can follow measures the same interest without it.
 
 ---
@@ -376,6 +417,7 @@ Level: **R** required where it applies, **Rec** recommended. Why: **reputation**
 | H1 | Unused methods refused (405 with `Allow`, or another 4xx), never a 5xx; reads still succeed | R | safety | score, test |
 | H2 | Unused framework endpoints answer 404 | R | safety | score, test |
 | H3 | Runtime pinned and on its current security release | Rec | safety | review |
+| H4 | Edge rules match probe paths, not visitors; Bot Fight Mode and AI bot settings keep agents welcome | Rec | readers, cost | review |
 | P1 | Probes answer with a 4xx: never a 2xx, a 5xx or a redirect | R | reputation, safety | score, test |
 | P2 | Nothing shaped like a credential, names included | R | false alarm | score |
 | P3 | `X-Robots-Tag: noindex`, not in the sitemap, `no-store` or a cache of a day or less | R | readers | score, test |
@@ -386,6 +428,7 @@ Level: **R** required where it applies, **Rec** recommended. Why: **reputation**
 | P8 | Ordinary 404s stay ordinary | R | readers | score, test |
 | X1 | No retaliation: small, prompt answers that stay on the site | R | cost | score, review |
 | X2 | No canary tokens dressed up as a prank | R | false alarm | review |
+| X3 | Never block or challenge by user agent, crawler name or verified status | R | readers | review |
 | C1 | The "only secret": a prank on probe paths, one reply per family, with tagged links | Rec | voice | score |
 | C2 | A note for AI agents that invites the operator and never instructs the agent | Rec | voice | score, review |
 | C3 | A line for people on the 404 page, pointing somewhere useful | Rec | readers | review |
@@ -404,5 +447,7 @@ Read 2026-10-23.
 - **Google Search Central:** [Robots meta tag, data-nosnippet, and X-Robots-Tag specifications](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag). (P3)
 - **WHATWG Fetch Standard:** [`X-Content-Type-Options`](https://fetch.spec.whatwg.org/#x-content-type-options-header). (P4)
 - **Next.js:** [Image optimization](https://nextjs.org/docs/app/api-reference/components/image) (the `/_next/image` endpoint) and the project's [security advisories](https://github.com/vercel/next.js/security/advisories). The 2026 advisory for the image optimizer is reported by the playbook; cite it here by its advisory ID when this item is next revised. (H2)
+- **Cloudflare:** [custom rules](https://developers.cloudflare.com/waf/custom-rules/) (Free: 5 rules, no regex), [rate limiting rules](https://developers.cloudflare.com/waf/rate-limiting-rules/) (Free: 1 rule, IP counting, 10-second period), [security features interoperability](https://developers.cloudflare.com/waf/feature-interoperability) (Bot Fight Mode can't be skipped by custom rules), [fields reference](https://developers.cloudflare.com/ruleset-engine/rules-language/fields/reference/) (`cf.client.bot`). The AI Crawl Control defaults (Search, Agent and Training groups, agents blocked on pages with ads for new domains from 2026-09-15) are from secondary reports; check your zone. (H4, X3)
+- **"Bots in AI clothing":** one owner's week of Cloudflare analytics, October 16 to 23, 2026: the third table in §2 and the crawler-name impersonation.
 - **animalhouse.ai's logs:** 24 hours to 2026-10-23, counted by the project's own agent: the second table in §2, the probe families beyond secret files, and the first draft of per-family replies that led to the P2 name rule and the C2 invitation rule.
 - **The Scanner Prank Playbook** ([docs/scanner-prank-playbook.md](docs/scanner-prank-playbook.md)): the traffic numbers in §2, the rules, and the first image-endpoint check that couldn't fail (H2, T1). October 2026.

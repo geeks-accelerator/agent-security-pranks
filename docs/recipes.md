@@ -149,6 +149,43 @@ location ~* (/\.env|/\.git(/|$)|/\.ssh/|/\.aws/|/id_(rsa|ed25519)|wp-config\.php
 
 `always` matters: without it, nginx drops `add_header` on a 404.
 
+## Cloudflare on the Free plan (H4, X3)
+
+Optional. The guard in your site is what the standard asks for; an edge rule only saves your server the work. The Free plan gives you 5 custom rules, no regex, 1 rate limiting rule (IP counting over 10 seconds) and Bot Fight Mode as an on/off switch.
+
+### Block probe families you don't prank
+
+Security > WAF > Custom rules > Create rule, Edit expression, action **Block**:
+
+```
+(
+  starts_with(http.request.uri.path, "/wp-")
+  or ends_with(http.request.uri.path, ".php")
+  or starts_with(http.request.uri.path, "/cgi-bin/")
+  or starts_with(http.request.uri.path, "/actuator")
+  or http.request.uri.path contains "/actuator/"
+  or http.request.uri.path contains "heapdump"
+  or http.request.uri.path contains "/.svn/"
+  or ends_with(http.request.uri.path, "/.DS_Store")
+  or http.request.uri.path contains "/@fs/"
+  or starts_with(http.request.uri.path, "/__vite")
+)
+and not starts_with(http.request.uri.path, "/api/")
+and not starts_with(http.request.uri.path, "/[your-content-prefix]/")
+```
+
+- **It matches paths only,** never the user agent or `cf.client.bot`: every visitor that asks for these gets the same answer, and no visitor you welcome ever asks (X3).
+- **Leave out the families your prank answers.** A blocked request never reaches the prank. With no prank at all, add `.env` and `.git` with full segments: `or ends_with(http.request.uri.path, "/.env") or http.request.uri.path contains "/.env." or http.request.uri.path contains "/.git/"`.
+- **Full segments, not fragments.** `contains "/wp-"` would also block `/news/wp-engine-outage`; `starts_with` doesn't. `ends_with(..., ".php")` blocks a real page that ends in `.php`, so exempt that prefix, or drop the line if the site runs PHP.
+- **Test it first.** Run the same logic over every sitemap URL and require zero matches, as for the guard (P6). Then score with `security-pranks-audit`: blocked probes show as "blocked by Cloudflare" under C1.
+
+### Settings that keep agents welcome
+
+- **Bot Fight Mode: off** on any site that welcomes agents. On the Free plan no rule can skip it, so it challenges scripts, headless browsers and MCP clients too.
+- **AI Crawl Control: check the AI bot settings.** They group AI bots as Search, Agent and Training, and the defaults can block some, for example agents on pages with ads. Set each to Allow if you welcome them.
+- **No rule that challenges crawler names or "unverified" traffic.** It catches assistants fetching for a person and every crawler not yet on a verified list (X3).
+- **Rate limiting:** the Free plan's single rule counts by address over 10 seconds, so it catches bursts, not a scanner sending a few requests a second all night. Leave it for a real abuse case.
+
 ## Guard tests (T1)
 
 Run these against the built server, not the dev server, and watch each fail once with the guard turned off. They use `node:test` and `fetch`; set `BASE` to the running build (`BASE=http://localhost:3000 node --test`).

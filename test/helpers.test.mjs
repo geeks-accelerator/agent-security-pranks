@@ -124,6 +124,8 @@ test('log lines parse in combined format and in each host\'s JSON', () => {
 
 test('client families: claimed crawlers, scripts, scanners', () => {
   assert.equal(family('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'), 'Claims to be a search crawler');
+  assert.equal(family('Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)'), 'Claims to be an AI crawler or assistant');
+  assert.equal(family('Mozilla/5.0 (compatible; DeepSeekBot/1.0)'), 'Claims to be an AI crawler or assistant');
   assert.equal(family('curl/8.5.0'), 'Scripts');
   assert.equal(family('Mozilla/5.0 zgrab/0.x'), 'Scanners that name themselves');
   assert.equal(family('security-pranks-audit/1.0.0 (+https://github.com/geeks-accelerator/agent-security-pranks)'), 'This audit (security-pranks-audit)');
@@ -160,6 +162,7 @@ test('the log tally counts probes, misses, the busiest address and followed link
   assert.deepEqual(r.kinds.find((k) => k.kind === 'env files').statuses, { 404: 1, 200: 1 });
   assert.deepEqual(r.succeeded_or_crashed.map((h) => h.request).sort(), ['200 GET /.env', '500 POST /']);
   assert.deepEqual(r.prank_links_followed, { 'ref=scanner-env': 1 });
+  assert.deepEqual(r.probes_under_crawler_names, { requests: 1, names: { googlebot: 1 } });
   const text = formatLogs(r).join('\n');
   assert.match(text, /The busiest address sent 30 requests \(81\.1% of all traffic\)/);
   assert.match(text, /Prank links followed/);
@@ -190,6 +193,13 @@ test('instructsAgent spots orders, not invitations', () => {
 
 test('knownProbe names the other families scanners hunt', () => {
   assert.equal(knownProbe('/actuator/heapdump'), 'Spring actuator and heap dumps');
+  assert.equal(knownProbe('/__vite_rsc_findSourceMapURL'), 'dev-server file reads');
+  assert.equal(knownProbe('/api/fs/read'), 'dev-server file reads');
+  assert.equal(knownProbe('/.svn/entries'), 'other version-control and system files');
+  assert.equal(knownProbe('/.DS_Store'), 'other version-control and system files');
+  assert.equal(knownProbe('/cgi-bin/luci'), 'infrastructure endpoints');
+  assert.equal(knownProbe('/agents/.env'), 'env files');
+  assert.equal(knownProbe('/.env::$DATA'), 'env files');
   assert.equal(knownProbe('/management/actuator'), 'Spring actuator and heap dumps');
   assert.equal(knownProbe('/storage/logs/laravel.log'), 'framework logs and debug pages');
   assert.equal(knownProbe('/backup.zip'), 'backups and dumps');

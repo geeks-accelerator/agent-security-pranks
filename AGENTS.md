@@ -16,7 +16,8 @@ This repo publishes the Agent Security Pranks Standard (STANDARD.md) and its sco
 
 ## Rules
 
-- **Every kind of site.** The package scores 20+ sites with different products: static guides, apps with APIs and forms, sites behind logins, aliases. A check that only makes sense for one kind skips the others with the reason, and a site that's safe with no prank passes every required check. Add a fixture before changing how a kind of site is scored.
+- **Welcome every mind.** Nothing in the standard, the recipes or the scorecard's advice may block, challenge or slow a visitor for its user agent, claimed name or verified status (principle 8, X3). Answer behavior: paths and methods. Scope is websites the owner runs and manages; parked and redirect-only domains are out.
+- **Every kind of site.** The package scores 20+ sites with different products: static guides, news sites, apps with APIs and forms, sites behind logins. A check that only makes sense for one kind skips the others with the reason, and a site that's safe with no prank passes every required check. Add a fixture before changing how a kind of site is scored.
 
 - **No dependencies.** Node 26 or later (26.12.1 or later, for its security release), built-ins only. All HTTP goes through `request()` in `src/http.mjs`, never `fetch`: it refuses encodings it doesn't decode itself, and it caps every body before and after decoding.
 - **Only the named site.** The audit requests the domain you name and its www or bare twin, never anything a site's answers point to, and never follows a redirect off the site. It may GET anything there, send a HEAD, and send an empty `POST` and `PUT` to `/` that create nothing. Never register, write or log in.
