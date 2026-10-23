@@ -1,7 +1,7 @@
 // --logs: count secret-hunting probes in an exported access log, before and after (T2).
 // Pure: the CLI feeds it lines. It prints counts and client families, never addresses.
 
-import { probeFamily, FRAMEWORK_ENDPOINTS } from './helpers.mjs';
+import { probeFamily, knownProbe, OTHER_PROBE_FAMILIES, FRAMEWORK_ENDPOINTS, SCANNER_TAG } from './helpers.mjs';
 
 // Client families, checked in order: the first match wins. A user agent is a claim, not proof:
 // many probes claim to be Googlebot, so search crawlers are reported as "claims to be".
@@ -44,12 +44,12 @@ export function parseLine(line) {
     try { o = JSON.parse(t); } catch { return null; }
     let path = pick(o, FIELDS.path);
     if (typeof path !== 'string') return null;
-    if (/^https?:\/\//.test(path)) { try { path = new URL(path).pathname; } catch { return null; } }
-    return { path: path.split('?')[0], ua: String(pick(o, FIELDS.ua) ?? ''), addr: String(pick(o, FIELDS.addr) ?? ''), method: String(pick(o, FIELDS.method) ?? 'GET').toUpperCase(), status: Number(pick(o, FIELDS.status)) || 0 };
+    if (/^https?:\/\//.test(path)) { try { const u = new URL(path); path = u.pathname + u.search; } catch { return null; } }
+    return { path: path.split('?')[0], query: path.includes('?') ? path.slice(path.indexOf('?')) : '', ua: String(pick(o, FIELDS.ua) ?? ''), addr: String(pick(o, FIELDS.addr) ?? ''), method: String(pick(o, FIELDS.method) ?? 'GET').toUpperCase(), status: Number(pick(o, FIELDS.status)) || 0 };
   }
   const m = t.match(COMBINED);
   if (!m) return null;
-  return { addr: m[1], method: m[2].toUpperCase(), path: m[3].split('?')[0], status: Number(m[4]), ua: m[5] ?? '' };
+  return { addr: m[1], method: m[2].toUpperCase(), path: m[3].split('?')[0], query: m[3].includes('?') ? m[3].slice(m[3].indexOf('?')) : '', status: Number(m[4]), ua: m[5] ?? '' };
 }
 
 const FRAMEWORK_PATHS = FRAMEWORK_ENDPOINTS.map((f) => [f.label, f.path.split('?')[0]]);
@@ -60,19 +60,27 @@ export function probeKind(r) {
   if (fam) return fam;
   const fw = FRAMEWORK_PATHS.find(([, p]) => r.path === p || r.path.startsWith(`${p}/`));
   if (fw) return `framework endpoint ${fw[0]}`;
+  const other = knownProbe(r.path);
+  if (other) return other;
   if (!['GET', 'HEAD'].includes(r.method)) return `${r.method} requests`;
   return null;
 }
 
-const statusClass = (s) => (s ? `${String(s)[0]}xx` : 'unknown');
+// Families a site might really serve (PHP pages, zip downloads): their counts can include real traffic.
+const MAYBE_REAL = new Set(OTHER_PROBE_FAMILIES.map(([name]) => name).filter((n) => /PHP|backups/.test(n)));
 
-/** Tally lines one at a time; result() gives the report. */
+const statusClass = (s) => (s ? `${String(s)[0]}xx` : 'unknown');
+const share = (n, of) => (of ? Math.round((n / of) * 1000) / 10 : 0);
+
+/** Tally lines one at a time; result() gives the report. Addresses are counted, never kept in the report. */
 export function logTally() {
-  let lines = 0, parsed = 0, notFound = 0, probeTotal = 0;
+  let lines = 0, parsed = 0, notFound = 0, probeTotal = 0, otherMisses = 0, noUa = 0;
   const statuses = new Map(); // class -> count, all traffic
   const kinds = new Map(); // kind -> { requests, statuses: Map, families: Map }
-  const addrs = new Set();
-  const hits = new Map(); // "kind path status" -> count, for probes that got 2xx or 5xx
+  const probeAddrs = new Set();
+  const perAddr = new Map(); // addr -> { requests, probes, misses, paths: Set, noUa }
+  const hits = new Map(); // "status method path" -> count, for probes that got 2xx or 5xx
+  const tags = new Map(); // tag -> count, for prank links followed
   return {
     add(line) {
       lines++;
@@ -81,10 +89,22 @@ export function logTally() {
       parsed++;
       statuses.set(statusClass(r.status), (statuses.get(statusClass(r.status)) ?? 0) + 1);
       if (r.status === 404) notFound++;
+      if (!r.ua || r.ua === '-') noUa++;
+      const tag = r.query?.match(SCANNER_TAG)?.[0]?.slice(1);
+      if (tag) tags.set(tag, (tags.get(tag) ?? 0) + 1);
       const kind = probeKind(r);
-      if (!kind) return;
+      if (r.addr) {
+        if (!perAddr.has(r.addr)) perAddr.set(r.addr, { requests: 0, probes: 0, misses: 0, paths: new Set(), noUa: 0 });
+        const a = perAddr.get(r.addr);
+        a.requests++;
+        if (kind) a.probes++;
+        else if (r.status >= 400 && r.status < 500) a.misses++;
+        if (a.paths.size < 5000) a.paths.add(r.path);
+        if (!r.ua || r.ua === '-') a.noUa++;
+      }
+      if (!kind) { if (r.status >= 400 && r.status < 500) otherMisses++; return; }
       probeTotal++;
-      if (r.addr) addrs.add(r.addr);
+      if (r.addr) probeAddrs.add(r.addr);
       if (!kinds.has(kind)) kinds.set(kind, { requests: 0, statuses: new Map(), families: new Map() });
       const k = kinds.get(kind);
       k.requests++;
@@ -98,15 +118,23 @@ export function logTally() {
     },
     result() {
       const sorted = (m) => Object.fromEntries([...m].sort((a, b) => b[1] - a[1]));
+      const addrs = [...perAddr.values()];
+      const busiest = addrs.sort((a, b) => b.requests - a.requests)[0];
+      const scanners = addrs.filter((a) => a.requests >= 20 && (a.probes + a.misses) / a.requests >= 0.9);
       return {
         lines,
         parsed,
         statuses: sorted(statuses),
         not_found_share: parsed ? Math.round((notFound / parsed) * 100) : 0,
+        breakdown: { probes: probeTotal, other_misses: otherMisses, rest: parsed - probeTotal - otherMisses },
+        no_user_agent: noUa,
         probes: probeTotal,
-        probe_addresses: addrs.size,
-        kinds: [...kinds].map(([kind, k]) => ({ kind, requests: k.requests, statuses: sorted(k.statuses), families: sorted(k.families) })).sort((a, b) => b.requests - a.requests),
+        probe_addresses: probeAddrs.size,
+        busiest_address: busiest ? { requests: busiest.requests, share: share(busiest.requests, parsed), probes_or_misses: share(busiest.probes + busiest.misses, busiest.requests), paths: busiest.paths.size, no_user_agent: busiest.noUa === busiest.requests } : null,
+        scanner_addresses: { count: scanners.length, requests: scanners.reduce((n, a) => n + a.requests, 0) },
+        kinds: [...kinds].map(([kind, k]) => ({ kind, requests: k.requests, may_include_real_traffic: MAYBE_REAL.has(kind), statuses: sorted(k.statuses), families: sorted(k.families) })).sort((a, b) => b.requests - a.requests),
         succeeded_or_crashed: [...hits].map(([key, n]) => ({ request: key, count: n })).sort((a, b) => b.count - a.count),
+        prank_links_followed: sorted(tags),
       };
     },
   };
@@ -114,12 +142,20 @@ export function logTally() {
 
 /** The report as text. */
 export function formatLogs(rep) {
+  const b = rep.breakdown;
   const out = [`Read ${rep.parsed} of ${rep.lines} log lines (${rep.lines - rep.parsed} not understood)`];
   out.push(`All traffic by status: ${Object.entries(rep.statuses).map(([s, n]) => `${s} ${n}`).join(', ') || 'none'}; ${rep.not_found_share}% were 404s`);
-  out.push(`Probes: ${rep.probes} request${rep.probes === 1 ? '' : 's'} from ${rep.probe_addresses} address${rep.probe_addresses === 1 ? '' : 'es'}`, '');
+  out.push(`Breakdown: probes ${b.probes} (${share(b.probes, rep.parsed)}%), other misses ${b.other_misses} (${share(b.other_misses, rep.parsed)}%), everything else ${b.rest} (${share(b.rest, rep.parsed)}%)`);
+  out.push(`Probes came from ${rep.probe_addresses} address${rep.probe_addresses === 1 ? '' : 'es'}. ${rep.no_user_agent} requests (${share(rep.no_user_agent, rep.parsed)}%) sent no user agent.`);
+  if (rep.busiest_address) {
+    const a = rep.busiest_address;
+    out.push(`The busiest address sent ${a.requests} requests (${a.share}% of all traffic) for ${a.paths} different paths; ${a.probes_or_misses}% were probes or misses${a.no_user_agent ? ', all with no user agent' : ''}. A rate limit at the CDN suits an address like this.`);
+  }
+  if (rep.scanner_addresses.count) out.push(`${rep.scanner_addresses.count} address${rep.scanner_addresses.count === 1 ? '' : 'es'} sent 20 or more requests that were almost all probes or misses: ${rep.scanner_addresses.requests} requests together.`);
+  out.push('');
   if (!rep.kinds.length) out.push('No probe requests.');
   for (const k of rep.kinds) {
-    out.push(`${k.kind}  ${k.requests} request${k.requests === 1 ? '' : 's'} (${Object.entries(k.statuses).map(([s, n]) => `${s} ×${n}`).join(', ')})`);
+    out.push(`${k.kind}  ${k.requests} request${k.requests === 1 ? '' : 's'} (${Object.entries(k.statuses).map(([s, n]) => `${s} ×${n}`).join(', ')})${k.may_include_real_traffic ? '  [includes real traffic if your site serves these]' : ''}`);
     for (const [fam, n] of Object.entries(k.families)) out.push(`  ${String(n).padStart(6)}  ${fam}`);
   }
   out.push('');
@@ -128,6 +164,8 @@ export function formatLogs(rep) {
     for (const h of rep.succeeded_or_crashed.slice(0, 20)) out.push(`  ${String(h.count).padStart(6)}  ${h.request}`);
     if (rep.succeeded_or_crashed.length > 20) out.push(`  and ${rep.succeeded_or_crashed.length - 20} more`);
   } else out.push('Every probe got something other than a 2xx or a 5xx.');
+  const followed = Object.entries(rep.prank_links_followed);
+  if (followed.length) out.push('', 'Prank links followed (C1, T2):', ...followed.map(([t, n]) => `  ${String(n).padStart(6)}  ${t}`));
   out.push('', 'Run it on a day of logs before you ship and again after: scanner 5xx should drop to zero, and every probe should stay a failure (STANDARD.md, T2).');
   return out;
 }

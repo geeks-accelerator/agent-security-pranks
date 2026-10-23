@@ -8,13 +8,15 @@ This repo publishes the Agent Security Pranks Standard (STANDARD.md) and its sco
 - `src/audit.mjs`: the checks, as a library (`audit`, `score`, `matrix`).
 - `src/helpers.mjs`: pure helpers the checks share (the probe pattern, credential shapes, the echo test, compare), tested without a network. Internal: the package exports only `src/audit.mjs`.
 - `src/http.mjs`: `request()`, the audit's one HTTP request, on `node:http(s)`, with size and time caps.
-- `src/logs.mjs`: `--logs`, which counts probes in an exported access log. It classifies paths with the audit's own pattern (`probeFamily`), so the two can't drift.
+- `src/logs.mjs`: `--logs`, which counts probes in an exported access log. It classifies secret paths with the audit's own pattern (`probeFamily`), so the two can't drift, and other probe families (`OTHER_PROBE_FAMILIES`: actuator, framework logs, backups, WordPress and PHP) on their own.
 - `bin/security-pranks-audit.mjs`: the command-line tool.
-- `test/`: guard tests, and an end-to-end test that audits two fixture sites on localhost through `--base` (`test/fixture-site.mjs`): one that follows every rule, one that breaks each rule once. A new check or a changed one gets a case in both fixtures and an assertion. `npm test` runs them all, with no outside network.
+- `test/`: guard tests, and an end-to-end test that audits fixture sites on localhost through `--base` (`test/fixture-site.mjs`): one that follows every rule, one that breaks each rule once, an app with an API and no prank, a playful first draft with warnings, an alias domain and a CDN-blocked site. A new check or a changed one gets a case in the good and broken fixtures and an assertion. `npm test` runs them all, with no outside network.
 - `docs/scanner-prank-playbook.md` and `docs/scanner-prank-playbook.html`: the field guide the standard comes from, in two forms. Change both together. `docs/adopting.md`: the switch-over steps a project's agent follows. `docs/recipes.md`: copyable code and guard tests. `docs/plans/`: plans, each with a dated status line.
 - GitHub's settings hold the repo's description, website and topics (`gh repo edit`). Keep them in step with the README's opening line and `package.json`'s description and keywords: they're what people searching npm and GitHub see first.
 
 ## Rules
+
+- **Every kind of site.** The package scores 20+ sites with different products: static guides, apps with APIs and forms, sites behind logins, aliases. A check that only makes sense for one kind skips the others with the reason, and a site that's safe with no prank passes every required check. Add a fixture before changing how a kind of site is scored.
 
 - **No dependencies.** Node 26 or later (26.12.1 or later, for its security release), built-ins only. All HTTP goes through `request()` in `src/http.mjs`, never `fetch`: it refuses encodings it doesn't decode itself, and it caps every body before and after decoding.
 - **Only the named site.** The audit requests the domain you name and its www or bare twin, never anything a site's answers point to, and never follows a redirect off the site. It may GET anything there, send a HEAD, and send an empty `POST` and `PUT` to `/` that create nothing. Never register, write or log in.

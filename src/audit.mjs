@@ -8,9 +8,9 @@
 // PUT to / that create nothing. It never follows a redirect off the site. Node 26 or later, no dependencies.
 
 import { request, TIMEOUT_MS } from './http.mjs';
-import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock } from './helpers.mjs';
+import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, SCANNER_TAG } from './helpers.mjs';
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
 const UA = `security-pranks-audit/${VERSION} (+${REPO})`;
 export const LEVELS = ['required', 'recommended'];
@@ -25,6 +25,7 @@ export const REVIEW = [
   ['P7', 'any fact the prank states appears word for word in the published source, checked by a test'],
   ['X2', 'no canary tokens dressed up as a prank'],
   ['C3', 'the 404 page has a line for people, in the product\'s voice, pointing somewhere useful'],
+  ['C4', 'a public page of misses, if you have one: paths and counts only, never addresses, and every path cleaned before it goes on the page'],
   ['T1', 'each check runs against the built server and was seen failing once with the feature off'],
   ['T2', 'a day of logs read before and after (security-pranks-audit --logs)'],
 ];
@@ -74,6 +75,17 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     wrong('P1', 'Probes answer with a failure', 'required', `no answer from ${origin}: ${home.error}`);
     return finish({ origin, prank: false, framework: null });
   }
+  // A domain that only redirects to another site (an alias, an old name) has nothing of its own
+  // to score: its probes go wherever its redirect goes.
+  if (home.status >= 300 && home.status < 400 && home.location && !onSite(home.location)) {
+    skip('P1', 'Probes answer with a failure', 'required', `${origin}/ redirects to ${new URL(home.location).host}: audit that domain instead`);
+    return finish({ origin, prank: false, framework: null, redirects_to: new URL(home.location).host });
+  }
+  // A CDN that blocks the audit's own requests hides the site; say so instead of scoring the block page.
+  if (edgeBlock(home)) {
+    warn('P1', 'Probes answer with a failure', 'required', `${edgeBlock(home)} blocked the audit at ${origin}/ (${home.status}), so nothing reached the site. Allow the user agent security-pranks-audit in the CDN's rules, or score a build with --base`);
+    return finish({ origin, prank: false, framework: null, blocked_by: edgeBlock(home) });
+  }
 
   const marker = `spa${rand}`;
   const longRun = 'z'.repeat(600);
@@ -97,8 +109,12 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // Which probes got a prank: an answer that isn't the site's ordinary 404 page, or one shaped like
   // an env file. A CDN or firewall block page is neither: the request never reached the site.
   const missingNorm = withoutPath(missing.text, missingPath);
+  // An API's own error (JSON, or an auth or rate-limit status) is the API answering, not a prank:
+  // sites with an API under /api answer /API/.ENV that way, and that's fine.
   const blocked = probeRows.filter(({ r }) => edgeBlock(r));
-  const isPrank = ({ path: p, r }) => r.status >= 400 && r.status < 500 && r.text.trim() !== '' && !edgeBlock(r)
+  const apiAnswer = (r) => !looksLikePrank(r.text) && (/json/i.test(r.type) || [401, 403, 405, 429].includes(r.status));
+  const byApi = probeRows.filter(({ r }) => !edgeBlock(r) && r.status >= 400 && r.status < 500 && apiAnswer(r));
+  const isPrank = ({ path: p, r }) => r.status >= 400 && r.status < 500 && r.text.trim() !== '' && !edgeBlock(r) && !apiAnswer(r)
     && (withoutPath(r.text, p) !== missingNorm || looksLikePrank(r.text));
   const pranked = probeRows.filter(isPrank);
   const prankBodies = new Set(pranked.map(({ path: p, r }) => withoutPath(r.text, p)));
@@ -115,6 +131,9 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   }
   pageUrls = [...new Set(pageUrls)];
   const sitePages = pageUrls.filter(onSite);
+  // A sample of the sitemap's pages, read once: P6 checks none gets the prank, H2 looks for the framework endpoint in use.
+  const sample = sitePages.length ? spread(sitePages, PAGES) : [`${origin}/`];
+  const pages = sitePages.length ? await mapLimit(sample, LIMIT, (u) => get(u, { follow: true })) : [home];
 
   // ---- P1 probes answer with a failure (required) ----
   {
@@ -134,28 +153,30 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // ---- P2 nothing shaped like a credential (required) ----
   {
     const id = 'P2', name = 'Nothing shaped like a credential', level = 'required';
-    const bad = [...probeRows, { path: missingPath, r: missing }].map(({ path: p, r }) => [p, credentialShapes(r.text)]).filter(([, k]) => k.length);
+    const answers = [...probeRows, { path: missingPath, r: missing }];
+    const bad = answers.map(({ path: p, r }) => [p, credentialShapes(r.text)]).filter(([, k]) => k.length);
+    const named = [...new Set(answers.flatMap(({ r }) => secretAssignments(r.text)))];
     if (bad.length) wrong(id, name, level, bad.map(([p, k]) => `${shown(p)}: ${k.join(', ')}`).join('; ') + '. A secret scanner would extract it, and someone else chases a false alarm');
-    else pass(id, name, level, `no credential-shaped strings in ${probeRows.length + 1} answers`);
+    else if (named.length) warn(id, name, level, `${named.join(', ')} ${named.length === 1 ? 'is' : 'are'} given a one-word value. A person reads it as a joke; a generic secret scanner keys on the name and extracts the value. Use a setting (PASSWORD_REQUIRED=false), a quoted phrase, or a name that isn't secret-shaped`);
+    else pass(id, name, level, `no credential-shaped strings in ${answers.length} answers`);
   }
 
   // ---- P3 never cached or indexed (required) ----
   {
-    const id = 'P3', name = 'Never cached or indexed', level = 'required';
+    const id = 'P3', name = 'Not indexed, not cached for long', level = 'required';
     const inSitemap = pageUrls.filter((u) => { try { return isSecretProbe(new URL(u).pathname); } catch { return false; } }).map(path);
-    const problems = [];
-    if (inSitemap.length) problems.push(`the sitemap lists ${inSitemap.slice(0, 3).join(', ')}${inSitemap.length > 3 ? ` and ${inSitemap.length - 3} more` : ''}`);
-    const lacking = new Map(); // what's missing -> paths
-    for (const { path: p, r } of pranked) {
-      const lacks = [];
-      if (!/no-store/i.test(r.headers.get('cache-control') ?? '')) lacks.push('Cache-Control: no-store');
-      if (!/noindex/i.test(r.headers.get('x-robots-tag') ?? '')) lacks.push('X-Robots-Tag: noindex');
-      if (lacks.length) lacking.set(lacks.join(' and '), [...(lacking.get(lacks.join(' and ')) ?? []), shown(p)]);
-    }
-    for (const [lacks, paths] of lacking) problems.push(`${paths.length} prank answer${paths.length === 1 ? '' : 's'} (${paths.slice(0, 2).join(', ')}${paths.length > 2 ? '...' : ''}) lack${paths.length === 1 ? 's' : ''} ${lacks}`);
-    if (problems.length) wrong(id, name, level, `${problems.join('; ')}. A cached or indexed prank keeps answering after you change it, and search shows it`);
+    const group = (rows, test) => {
+      const by = new Map(); // problem -> paths
+      for (const { path: p, r } of rows) { const what = test(r); if (what) by.set(what, [...(by.get(what) ?? []), shown(p)]); }
+      return [...by].map(([what, paths]) => `${paths.length} prank answer${paths.length === 1 ? '' : 's'} (${paths.slice(0, 2).join(', ')}${paths.length > 2 ? '...' : ''}): ${what}`);
+    };
+    const fails = group(pranked, (r) => (/noindex/i.test(r.headers.get('x-robots-tag') ?? '') ? null : 'no X-Robots-Tag: noindex'));
+    if (inSitemap.length) fails.unshift(`the sitemap lists ${inSitemap.slice(0, 3).join(', ')}${inSitemap.length > 3 ? ` and ${inSitemap.length - 3} more` : ''}`);
+    const warns = group(pranked, (r) => cacheProblem(r.headers.get('cache-control')));
+    if (fails.length) wrong(id, name, level, `${fails.concat(warns).join('; ')}. Search shows an indexed prank to people looking for the site`);
     else if (!prank) skip(id, name, level, 'no prank found (C1), and the sitemap lists no probe paths');
-    else pass(id, name, level, `${pranked.length} prank answers send no-store and noindex; the sitemap lists no probe paths`);
+    else if (warns.length) warn(id, name, level, `${warns.join('; ')}. An old prank keeps answering after you change it`);
+    else pass(id, name, level, `${pranked.length} prank answers send noindex and no-store or a cache of a day or less; the sitemap lists no probe paths`);
   }
 
   // ---- P4 plain text, not sniffed (required) ----
@@ -185,8 +206,6 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // ---- P6 real pages never get the prank (required) ----
   {
     const id = 'P6', name = 'Real pages never get the prank', level = 'required';
-    const sample = sitePages.length ? spread(sitePages, PAGES) : [`${origin}/`];
-    const pages = sitePages.length ? await mapLimit(sample, LIMIT, (u) => get(u, { follow: true })) : [home];
     const hit = pages.map((r, i) => [sample[i], r]).filter(([u, r]) => prankBodies.has(withoutPath(r.text, path(u))) || (!ok(r) && looksLikePrank(r.text))).map(([u, r]) => `${path(u)} (${r.status})`);
     const caught = sitePages.map(path).filter((p) => isSecretProbe(p.split('?')[0]));
     const read = sitePages.length ? `${pages.length} of ${sitePages.length} sitemap pages` : 'the homepage (no sitemap found)';
@@ -207,22 +226,34 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // ---- H1 refuse methods the site doesn't use (required) ----
   {
     const id = 'H1', name = 'Unused methods refused', level = 'required';
+    // A homepage behind a login (401) still shows the guard: it answered. Any other failure refuses reads.
+    const readable = (r) => (r.status >= 200 && r.status < 400) || r.status === 401;
     const allow = (post.headers.get('allow') ?? '').toUpperCase();
-    if (!ok(home)) wrong(id, name, level, `GET / answers ${home.status}: a guard refuses reads`);
-    else if (!(head.status >= 200 && head.status < 400)) wrong(id, name, level, `HEAD / answers ${head.status || head.error}: a guard refuses reads`);
-    else if (post.status >= 500 || put.status >= 500) wrong(id, name, level, `${[['POST', post], ['PUT', put]].filter(([, r]) => r.status >= 500).map(([m, r]) => `${m} / answers ${r.status}`).join(', ')}: a framework error, and the request reached code; answer methods you don't use with 405`);
-    else if (post.status === 405 && !allow) warn(id, name, level, 'POST / answers 405 without an Allow header (RFC 9110 requires one): send Allow: GET, HEAD');
-    else if (post.status === 405 && !allow.includes('POST')) pass(id, name, level, `POST / answers 405, Allow: ${allow}${put.status === 405 ? '; PUT / answers 405' : `; PUT / answers ${put.status}`}`);
-    else warn(id, name, level, `POST / answers ${post.status || post.error}: the site accepts POST, so it isn't read-only. If it should be, answer 405 with Allow: GET, HEAD`);
+    const refused = (r) => r.status >= 400 && r.status < 500;
+    const accepted = [['POST', post], ['PUT', put]].filter(([, r]) => r.status >= 200 && r.status < 400);
+    const both = `POST / answers ${post.status}, PUT / answers ${put.status}`;
+    if (!readable(home)) wrong(id, name, level, `GET / answers ${home.status}: a guard refuses reads`);
+    else if (!readable(head)) wrong(id, name, level, `HEAD / answers ${head.status || head.error}: a guard refuses reads`);
+    else if (post.status >= 500 || put.status >= 500) wrong(id, name, level, `${[['POST', post], ['PUT', put]].filter(([, r]) => r.status >= 500).map(([m, r]) => `${m} / answers ${r.status}`).join(', ')}: a framework error, and the request reached code; refuse methods a route doesn't use, with 405`);
+    else if (post.status === 405 && !allow) warn(id, name, level, 'POST / answers 405 without an Allow header (RFC 9110 requires one): send Allow with the methods / takes, such as GET, HEAD');
+    else if (accepted.length) warn(id, name, level, `${accepted.map(([m, r]) => `${m} / answers ${r.status}`).join(', ')}: the homepage accepts ${accepted.map(([m]) => m).join(' and ')}. If nothing on / takes it, answer 405 with Allow: GET, HEAD`);
+    else if (refused(post) && refused(put)) pass(id, name, level, post.status === 405 ? `${both}, Allow: ${allow}` : `${both}: refused`);
+    else warn(id, name, level, `${both}${post.error ? ` (${post.error})` : ''}`);
   }
 
   // ---- H2 unused framework endpoints refused (required, where the framework has one) ----
   {
     const id = 'H2', name = 'Unused framework endpoints refused', level = 'required';
+    // A page that uses the endpoint means it's in use. The audit reads a sample, so it fails only
+    // when the sample is the whole sitemap; otherwise an unseen page might use it, and it warns.
+    const usedOn = framework ? sample.filter((u, i) => framework.used(pages[i])).map(path) : [];
+    const wholeSite = sitePages.length > 0 && sitePages.length <= pages.length;
     if (!framework) skip(id, name, level, `no framework with a known always-on endpoint found (checked ${FRAMEWORK_ENDPOINTS.map((f) => f.framework).join(', ')})`);
     else if (!fw) skip(id, name, level, `${framework.framework}: the homepage uses ${framework.label}, so it's in use; keep the framework patched (H3)`);
+    else if (usedOn.length) skip(id, name, level, `${framework.framework}: ${usedOn[0]} uses ${framework.label}, so it's in use; keep the framework patched (H3)`);
     else if (fw.status === 404) pass(id, name, level, `${framework.framework}: ${framework.label} answers 404`);
-    else wrong(id, name, level, `${framework.framework}: ${framework.label} answers ${fw.status || fw.error}, though the homepage doesn't use it. Answer 404, so the next advisory in that endpoint can't reach you`);
+    else if (wholeSite) wrong(id, name, level, `${framework.framework}: ${framework.label} answers ${fw.status || fw.error}, and none of the site's ${sitePages.length} sitemap pages uses it. Answer 404, so the next advisory in that endpoint can't reach you`);
+    else warn(id, name, level, `${framework.framework}: ${framework.label} answers ${fw.status || fw.error}, and none of the ${pages.length} pages read uses it${sitePages.length ? ` (of ${sitePages.length} in the sitemap)` : ''}. If no page uses it, answer 404 so the next advisory in that endpoint can't reach you; if one does, keep the framework patched`);
   }
 
   // ---- X1 no retaliation (required) ----
@@ -245,20 +276,26 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // ---- C1 a prank answers the probes (recommended) ----
   {
     const id = 'C1', name = 'A prank answers the probes', level = 'recommended';
-    const counted = probeRows.filter((x) => x.path !== echoPath && !edgeBlock(x.r));
-    const plain = counted.filter((x) => !isPrank(x)).map((x) => shown(x.path));
+    const counted = probeRows.filter((x) => x.path !== echoPath && !edgeBlock(x.r) && !byApi.includes(x));
+    const plain = counted.filter((x) => !isPrank(x)).map(({ path: p, r }) => `${shown(p)} (${r.status} ${ct(r)})`);
     const got = counted.length - plain.length;
     const edge = blocked.length ? `; ${blocked.map(({ path: p, r }) => `${shown(p)} blocked by ${edgeBlock(r)}`).join(', ')} before it reached the site` : '';
-    if (!prank) miss(id, name, level, `the probes get the site's ordinary 404 page${edge}. That's safe; a prank is optional (see the menu)`);
-    else if (plain.length) warn(id, name, level, `${got} of ${counted.length} probes that reached the site get a prank; no prank on ${plain.join(', ')}${edge}`);
-    else pass(id, name, level, `${got} of ${counted.length} probes that reached the site get a prank (${pranked[0].r.status} ${ct(pranked[0].r)})${edge}`);
+    const kinds = new Set(pranked.filter((x) => x.path !== echoPath).map(({ path: p, r }) => withoutPath(r.text, p))).size;
+    const api = byApi.filter((x) => x.path !== echoPath).map(({ path: p, r }) => `${shown(p)} (${r.status} ${ct(r)})`);
+    const edgeAndApi = edge + (api.length ? `; ${api.join(', ')} answered by the site's API` : '');
+    const tagged = pranked.some(({ r }) => SCANNER_TAG.test(r.text)) ? ', with a tagged link to count follow-through' : '';
+    if (!prank) miss(id, name, level, `the probes get the site's ordinary 404 page${edgeAndApi}. That's safe; a prank is optional (see the menu)`);
+    else if (plain.length) warn(id, name, level, `${got} of ${counted.length} probes that reached the site get a prank; no prank on ${plain.join(', ')}${edgeAndApi}`);
+    else pass(id, name, level, `${got} of ${counted.length} probes that reached the site get a prank (${pranked[0].r.status} ${ct(pranked[0].r)}${kinds > 1 ? `, ${kinds} different replies` : ''}${tagged})${edgeAndApi}`);
   }
 
   // ---- C2 a note for AI agents (recommended) ----
   {
     const id = 'C2', name = 'A note for AI agents', level = 'recommended';
+    const orders = [...new Set(pranked.flatMap(({ r }) => instructsAgent(r.text)))];
     if (!prank) skip(id, name, level, 'no prank found (C1)');
-    else if (pranked.some(({ r }) => /\b(ai agents?|agents?|llms?|language models?)\b/i.test(r.text))) pass(id, name, level, 'the prank has a note addressed to AI agents');
+    else if (orders.length) warn(id, name, level, `the prank gives the agent ${orders.join(' and ')}. That works only on an agent that obeys instructions it finds in a response, against its operator's task. Invite the operator instead, with a link`);
+    else if (pranked.some(({ r }) => /\b(ai agents?|agents?|llms?|language models?)\b/i.test(r.text))) pass(id, name, level, 'the prank has a note addressed to AI agents, and gives them no orders');
     else miss(id, name, level, 'the prank has no note for AI agents. Some scanners are driven by language models that read the answer');
   }
 
@@ -286,7 +323,7 @@ export function matrix(reports, command) {
     ...ids.map(([id, name, level]) => `| ${id} | ${name} | ${level} | ${reports.map((rep) => sym[rep.results.find((r) => r.id === id)?.status ?? 'skip']).join(' | ')} |`),
     `| | **Required passed** | | ${reports.map((rep) => `**${score(rep.results, 'required')}**`).join(' | ')} |`,
     `| | Recommended passed | | ${reports.map((rep) => score(rep.results, 'recommended')).join(' | ')} |`,
-    `| | Prank found | | ${reports.map((rep) => (rep.prank ? 'yes' : 'no')).join(' | ')} |`,
+    `| | Prank found | | ${reports.map((rep) => (rep.redirects_to ? `redirects to ${rep.redirects_to}` : rep.blocked_by ? `audit blocked by ${rep.blocked_by}` : rep.prank ? 'yes' : 'no')).join(' | ')} |`,
     `| | Framework | | ${reports.map((rep) => rep.framework ?? 'not detected').join(' | ')} |`,
     '',
     '## What to fix, per site', '',

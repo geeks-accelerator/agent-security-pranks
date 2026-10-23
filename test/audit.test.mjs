@@ -63,6 +63,39 @@ test('the broken fixture fails every required check, each for its planted reason
   assert.doesNotMatch(JSON.stringify(res), /127\.0\.0\.1/);
 });
 
+test('an app with an API and a form, and no prank, passes every required check', async () => {
+  const { rep } = await run('api');
+  const by = byId(rep);
+  for (const r of rep.results.filter((x) => x.level === 'required')) assert.notEqual(r.status, 'fail', `${r.id}: ${r.detail}`);
+  assert.equal(rep.prank, false);
+  assert.equal(rep.framework, null);
+  assert.match(by.H1.detail, /POST \/ answers 404, PUT \/ answers 404: refused/);
+  assert.match(by.C1.detail, /\/API\/\.ENV \(401 application\/json\) answered by the site's API/);
+  for (const id of ['P3', 'P4', 'C2', 'H2']) assert.equal(by[id].status, 'skip', id);
+});
+
+test('a playful first draft warns on secret-named keys, a long cache and orders to agents, and fails nothing', async () => {
+  const { rep } = await run('cheeky');
+  const by = byId(rep);
+  assert.ok(!rep.results.some((r) => r.status === 'fail'), rep.results.filter((r) => r.status === 'fail').map((r) => r.id).join());
+  assert.match(by.P2.detail, /SECRET_KEY, DATABASE_PASSWORD are given a one-word value/);
+  assert.match(by.P3.detail, /cached for 168 hours/);
+  assert.match(by.C2.detail, /gives the agent a request to send/);
+  assert.equal(by.P2.status, 'warn');
+  assert.equal(by.P3.status, 'warn');
+});
+
+test('an alias domain and a CDN that blocks the audit are reported, not scored', async () => {
+  const alias = (await run('alias')).rep;
+  assert.equal(alias.redirects_to, 'elsewhere.example');
+  assert.deepEqual(alias.results.map((r) => [r.id, r.status]), [['P1', 'skip']]);
+  const blocked = (await run('blocked')).rep;
+  assert.equal(blocked.blocked_by, 'Cloudflare');
+  assert.deepEqual(blocked.results.map((r) => [r.id, r.status]), [['P1', 'warn']]);
+  const md = matrix([alias, blocked], 'cmd');
+  assert.match(md, /^\| \| Prank found \| \| redirects to elsewhere\.example \| audit blocked by Cloudflare \|$/m);
+});
+
 test('the status page covers both sites, and --compare finds a planted regression', async () => {
   const [good, bad] = await Promise.all([run('good'), run('broken')]);
   const md = matrix([good.rep, bad.rep], 'npx security-pranks-audit@1 --matrix good.example broken.example');

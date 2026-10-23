@@ -11,21 +11,21 @@ npx security-pranks-audit example.com
 ```
 
 ```
-Agent security pranks: upstateny.news  (security-pranks-audit v1.0.0)
+Agent security pranks: upstateny.news  (security-pranks-audit v1.1.0)
 Probed https://upstateny.news. Prank found: yes. Framework: Next.js.
 
 Required
   PASS  P1  Probes answer with a failure         9 of 9 probes answered with a 4xx (403 ×1, 404 ×8)
   PASS  P2  Nothing shaped like a credential     no credential-shaped strings in 10 answers
-  PASS  P3  Never cached or indexed              8 prank answers send no-store and noindex; the sitemap lists no probe paths
+  PASS  P3  Not indexed, not cached for long     8 prank answers send noindex and no-store or a cache of a day or less; the sitemap lists no probe paths
   PASS  P6  Real pages never get the prank       read 10 of 19 sitemap pages: none answered with the prank
-  PASS  H1  Unused methods refused               POST / answers 405, Allow: GET, HEAD; PUT / answers 405
+  PASS  H1  Unused methods refused               POST / answers 405, PUT / answers 405, Allow: GET, HEAD
   PASS  H2  Unused framework endpoints refused   Next.js: /_next/image answers 404
-  PASS  X1  No retaliation                       every answer within 0.3 seconds, the largest 9.9 KB, no redirects off the site
+  PASS  X1  No retaliation                       every answer within 0.4 seconds, the largest 9.9 KB, no redirects off the site
   ...
 Recommended
   PASS  C1  A prank answers the probes           7 of 7 probes that reached the site get a prank (404 text/plain); /wp-config.php blocked by Cloudflare before it reached the site
-  PASS  C2  A note for AI agents                 the prank has a note addressed to AI agents
+  PASS  C2  A note for AI agents                 the prank has a note addressed to AI agents, and gives them no orders
 
 Score on 2026-10-23: required 10 of 10, recommended 2 of 2
 ```
@@ -41,7 +41,7 @@ This repo holds:
 - **Built from logs.** On a network of eleven small sites, about 64% of requests were 404s, nearly all of them probes: 1,806 requests for secrets in 16 hours. Each item says what harm it prevents, and the claims cite RFCs and official docs with dates.
 - **It checks that the joke can't backfire.** A prank served with a 200 puts your domain on shared target lists (P1). A fake key in it is a false alarm for a stranger to chase (P2). A prank that leaks into ordinary 404s confuses your readers (P8). The audit fails each of these.
 - **Hardening first, joke second.** Refusing unused methods (H1) and framework endpoints (H2) is what keeps the site safe. A prank is optional; a site with none can pass every required check.
-- **It fits the site.** It detects the framework from the homepage, the prank from the probe answers, an echoed path from a marker, and a CDN's firewall block page, and skips what doesn't apply with the reason.
+- **One tool for every kind of site.** Static guides, apps behind a login, sites with an API and forms, alias domains. It detects the framework, the prank, an API's own error answers, a CDN's block page, an echoed path and an alias redirect, and skips what doesn't apply with the reason. A site that's safe with no prank at all passes every required check.
 - **It can't be turned against you.** It requests only the site you name, never follows a redirect off it, and caps every answer at 256 KB and 10 seconds, so a site that answers with a zip bomb or a tarpit can't hurt the machine running it.
 - **Built for many sites.** `--matrix` scores a whole network into one status page, `--compare` shows what changed since last month, `--base` scores a build before it ships, and `--logs` counts probes before and after.
 
@@ -73,7 +73,7 @@ security-pranks-audit --logs <access-log> [--json]
 | `--base url` | score a local or preview build as the domain before you deploy (`--base http://localhost:3000`) |
 | `--compare file` | list what changed since a previous run: a status page from `--matrix` or a saved `--json` report |
 | `--matrix` | score several sites, three at a time, and print one markdown status page |
-| `--logs file` | count secret-hunting probes in an exported access log (combined log format, or JSON lines from Cloudflare, Vercel or Railway) by kind, status and client family, and list any probe that got a 2xx or a 5xx. It prints counts, never addresses |
+| `--logs file` | count probes in an exported access log (combined log format, or JSON lines from Cloudflare, Vercel or Railway): secret files, actuator and heap dumps, framework logs, backups, WordPress and PHP, unused methods. By kind, status and client family, with the busiest address's share of traffic, any probe that got a 2xx or a 5xx, and the prank's tagged links that came back. It prints counts, never addresses |
 
 From a clone, run `node bin/security-pranks-audit.mjs example.com`.
 
@@ -81,7 +81,7 @@ To check fixes before they ship, score a local build: `npx security-pranks-audit
 
 ## Score all your sites
 
-`--matrix` is built for a network of sites: one run, one status page with a column per site and a "what to fix" list for each.
+`--matrix` is built for a network of sites: one run, one status page with a column per site and a "what to fix" list for each. Sites with and without an API, with and without a prank, sit side by side: each is scored on what applies to it. An alias domain shows "redirects to" its target, and a site whose CDN blocks the audit says so instead of scoring the block page.
 
 ```
 npx security-pranks-audit@1 --matrix $(cat sites.txt) > docs/security-pranks-status.md
@@ -100,14 +100,14 @@ The comparison prints to stderr, one site at a time; the new page goes to stdout
 It checks, from outside:
 
 - every probe gets a 4xx, never a 2xx, a 5xx or a redirect (P1);
-- no answer contains anything shaped like a credential (P2);
-- the prank sends `no-store` and `noindex`, stays out of the sitemap, and is `text/plain` with `nosniff` (P3, P4);
+- no answer contains anything shaped like a credential, including secret-shaped names like `DATABASE_PASSWORD=` with a joke value (P2);
+- the prank sends `noindex`, isn't cached for more than a day, stays out of the sitemap, and is `text/plain` with `nosniff` (P3, P4);
 - an echoed path comes back cleaned (P5);
 - sitemap pages and an ordinary missing page never get the prank (P6, P8);
-- unused methods get a 405 with `Allow`, and reads still work (H1);
+- unused methods are refused (a 405 with `Allow`, or another 4xx on a site with forms or an API), never a 5xx, and reads still work (H1);
 - Next.js's `/_next/image` answers 404 when no page uses it (H2);
 - every answer is small, prompt and stays on the site: no zip bombs, tarpits or redirects to someone else (X1);
-- whether there's a prank at all, and a note in it for AI agents (C1, C2).
+- whether there's a prank at all, how many different replies and tagged links it has, and whether its note for AI agents invites the operator rather than giving the agent orders (C1, C2).
 
 It can't see your routes beyond the sitemap, whether the facts in your prank are right, your runtime version, or whether your tests have ever failed. The standard marks those "test" or "review", and [docs/recipes.md](docs/recipes.md) has guard tests for them. A high score is not the goal: a site that never leaks, never crashes on a probe and never shows the joke to a reader is.
 

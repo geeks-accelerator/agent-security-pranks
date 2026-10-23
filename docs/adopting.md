@@ -14,6 +14,7 @@ Everything below is for that agent. The lessons at the end come from the sites t
    - **Express or another Node server:** the first middleware.
    - **nginx:** a `location` block, with `always` on every `add_header`.
    - **A static site on a host or CDN:** the host's edge middleware or functions (a Cloudflare Worker or Pages Function, Vercel Routing Middleware, Netlify Edge Functions). A rewrite to a static file usually can't set a 404 status and the headers, so check what the host supports.
+   - **A site with an API:** exempt the API's prefix (and any MCP endpoint) from the prank. A probe there gets the API's own JSON 404 or 401, which is fine, and the scorecard counts it as the API answering.
 
    Code for the first three is in [recipes.md](recipes.md). If the owner runs several sites, put the pattern and the prank helper in one shared module or package, so a fix reaches all of them.
 
@@ -24,12 +25,13 @@ Everything below is for that agent. The lessons at the end come from the sites t
 
 4. **Write the prank, and show it to the owner (C1, C2).** It speaks in the owner's name on a public domain, so get their OK on the wording before it ships.
    - Pick the "only secret": something the project already gives away freely, such as its public meetings, opening hours, source code or published annual report. The table in [STANDARD.md C1](../STANDARD.md#c1-the-only-secret-you-have) has ideas.
-   - Every value plainly not a credential (P2): no strings shaped like keys, tokens or connection URLs, even fake ones.
+   - If `--logs` shows other families reaching the site (actuator and heap dumps, WordPress and PHP, `.git`), give each its own short reply in the same voice, with a link tagged `?ref=scanner-<family>`. Skip any family the site really serves.
+   - Every value plainly not a credential (P2): no strings shaped like keys, tokens or connection URLs, even fake ones, and no secret-shaped name (`SECRET_KEY`, `DATABASE_PASSWORD`) with a one-word value. `PASSWORD_REQUIRED=false` is fine.
    - If it states facts, build them from the same source the site publishes (P7).
-   - Add a note for AI agents that asks nothing harmful (C2).
+   - Add a note for AI agents that invites the operator, with a link (C2). Never tell the agent to send a request, run a command or register: that's a prompt injection, however friendly.
    - A prank is optional. If the owner doesn't want one, skip this step, record C1 as declined with the reason, and do the rest: the hardening and the rules are what keep the site safe.
 
-5. **Add the guard** behind the probe pattern: status 404, `Cache-Control: no-store`, `X-Robots-Tag: noindex`, `Content-Type: text/plain` and `X-Content-Type-Options: nosniff` (P1, P3, P4). If you echo the path, strip it to printable ASCII and cap its length (P5). Every other missing page keeps the normal 404 (P8). Run the pattern over every real route first, and narrow it if anything matches (P6).
+5. **Add the guard** behind the probe pattern: status 404, `X-Robots-Tag: noindex`, `Content-Type: text/plain`, `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store` or a cache of a day or less (P1, P3, P4). If you echo the path, strip it to printable ASCII and cap its length (P5). Every other missing page keeps the normal 404 (P8). Run the pattern over every real route first, and narrow it if anything matches (P6).
 
 6. **Add the guard tests (T1)** from [recipes.md](recipes.md): probes, an ordinary missing page, methods, the framework endpoint, every real route against the pattern, and quoted facts. Run them against the built server, and watch each fail once with the guard turned off.
 
@@ -53,4 +55,6 @@ When you're done, report the `--compare` output (what changed), the score before
 - The playbook's pattern catches any path where `env` is followed by `-`, `.`, `_`, `:` or `/`. A route like `/meetings/env-council` would get the prank. Run the route test before you ship.
 - A CDN's managed firewall rules may block some probes (Cloudflare blocks `/wp-config.php` on upstateny.news) before your guard sees them. That's a safe 403, and the scorecard reports it as blocked at the edge rather than grading it as the prank.
 - nginx drops `add_header` on error responses unless you add `always`.
+- At animalhouse (an app with an API), a pet named "Ugly.php" would have lost its page to the `.php` reply. Exempting the real content prefixes fixed it, and a test checks all 715 sitemap URLs against the pattern.
+- animalhouse's first draft named its jokes `DATABASE_PASSWORD=feed-the-ferret-first` and told agents to `POST` to the sign-up API. Both read as jokes to a person. The first trips generic secret scanners (P2), and the second only works as a prompt injection (C2). The scorecard warns on both.
 - Keep logs somewhere a deploy can't wipe them, or there's nothing to compare after.

@@ -1,6 +1,6 @@
 # Agent Security Pranks Standard
 
-**What it is:** how a small public site answers the bots and agents that hunt it for leaked secrets: refuse what the site never needs, and, if you like, answer with a joke that costs nothing, leaks nothing and can't be mistaken for a find. Built from [the Scanner Prank Playbook](docs/scanner-prank-playbook.md), a deployment on a network of civic-guide sites, and checked against the specs ([§12](#12-specs-and-sources)).
+**What it is:** how a small public site answers the bots and agents that hunt it for leaked secrets: refuse what the site never needs, and, if you like, answer with a joke that costs nothing, leaks nothing and can't be mistaken for a find. Built from [the Scanner Prank Playbook](docs/scanner-prank-playbook.md), a deployment on a network of civic-guide sites, and from a day of logs at an app with an API (animalhouse.ai), and checked against the specs ([§12](#12-specs-and-sources)).
 **Scorecard:** `npx security-pranks-audit <domain>` (see the [README](README.md))
 **Last verified:** 2026-10-23
 
@@ -18,6 +18,7 @@
   - **Required**, because skipping it harms someone: your site (a 200 on `/.env` puts it on shared target lists), a stranger (a fake key someone has to chase), or your readers (a mistyped URL that shows the joke). Some required items apply only where they're true, such as P5 for a prank that echoes the path.
   - **Recommended**, when it fits the project: the prank itself, and the note for AI agents.
 - **A project may decline a recommended item,** such as the prank itself (C1). Record the decision and the reason in the stub (§10), and the item counts as met. Required items prevent harm, so they aren't declined; one that doesn't apply (H2 on a site with no framework) is skipped.
+- **One standard for every kind of site.** A static guide, an app behind a login, a site with an API and forms, an alias domain: the scorecard works out which items apply to each and skips the rest with the reason ([§3](#3-decide-what-applies)), so one `--matrix` run can cover a whole network of sites.
 - **The scorecard checks what's visible from outside.** It sends about 20 requests, a few at a time: eight probe paths, an echo test, a missing page, `GET`, `HEAD`, and an empty `POST` and `PUT` to `/`, the framework endpoint it detects, and up to 10 sitemap pages. It prints pass, warn or fail with the reason, and exits 1 when a required check fails, so it can gate a deploy. `--matrix <domains>` writes one status page for many sites.
 - **What it can't see** is listed under each item and in [§11](#11-the-checklist) as "review" or "test". Your own guard tests (T1) cover every route; the scorecard covers a sample.
 
@@ -54,19 +55,41 @@ What it means:
 - **Most of a small site's 404s are probes,** so a prank on probe paths is seen far more often by bots than by people, and a mistake in it is seen by people only if it leaks into ordinary 404s (P8).
 - **The probes caused server errors before the hardening.** Fake Server Action POSTs produced framework 500s with stack traces in the log. Refusing unused methods (H1) turned them into clean 405s.
 
+A day of logs at animalhouse.ai, an app with an API and an MCP endpoint (24 hours to 2026-10-23, requests that reached the app):
+
+| Measure | Value |
+|---|---|
+| Requests that reached the app | 16,022 |
+| Probes for known weak spots (`/.env`, `/actuator`, heap dumps, WordPress and PHP paths, `.git`, backups) | 4,131 (25.8%) |
+| Other misses, almost all from the same scanners guessing paths (`/storage/logs/laravel.log`, `/api/keys`) | 3,149 (19.7%) |
+| Requests from the busiest single address, with no user agent, for 372 different paths | 6,561 (41% of all traffic) |
+| Probes that got anything sensitive back | 0 |
+
+What it adds:
+
+- **Scanners hunt more than secret files.** Spring actuator endpoints, heap dumps, framework log files and backups are as common as `.env` at a site with an API. `--logs` counts them as their own families.
+- **One address can be most of it.** A rate limit at the CDN for an address like that removes most of the noise; the rest can get the joke.
+- **Some scanners are language models that read the answer,** which is why a prank can speak to them (C2), and why it must not give them orders.
+
 Re-measure with `--logs` and add dated results here when a site's numbers change what an item should say.
 
 ---
 
 ## 3. Decide what applies
 
-| Your site | Items that apply |
+| Your site | What changes |
 |---|---|
-| Any public site | H1 (read-only sites refuse other methods; others make sure they don't crash), H3, P1, P2, P8, X1, X2, T1, T2 |
-| Runs a framework with an always-on endpoint (Next.js `/_next/image`) | H2 |
-| Serves a prank | C1, C2, C3, P3, P4, P6, P7 if it states facts, P5 if it echoes the path |
+| Any public site | H1, H3, P1, P2, P8, X1, X2, T1 and T2 apply. A site that's safe with no prank at all passes every required check. |
+| Read-only (a guide, a blog, a marketing site) | H1: every method but `GET` and `HEAD` gets 405 with `Allow: GET, HEAD`. |
+| Takes forms or has an API | H1: each route refuses the methods it doesn't use (a 405 or a 404), and none answers with a 5xx. The API's own errors are fine as they are: a JSON 404, or a 401 for a missing key, on `/api/.env` is the API answering, not a prank, and the prank rules don't grade it. Exempt the API's prefix from the prank (P6). |
+| Behind a login | A 401 on the homepage still counts as answering. The probes are checked the same way. |
+| A static site on a host or CDN | The guard goes in the host's edge middleware or functions ([docs/adopting.md](docs/adopting.md), step 2). |
+| Runs a framework with an always-on endpoint (Next.js `/_next/image`) | H2. |
+| Serves a prank | C1, C2, C3, P3, P4, P6; P7 if it states facts; P5 if it echoes the path; C4 if it publishes a page of misses. |
+| An alias domain that redirects to another site | Nothing of its own to score: audit the target. The scorecard says so instead of scoring the redirect. |
+| One of many sites run by one owner | One shared module for the pattern and the replies, so a fix reaches them all, and one `--matrix` status page for all of them. |
 
-The scorecard works out most of this itself: it detects a framework from the homepage, a prank from the probe answers, and an echo from a marker in the path. It skips what doesn't apply, with the reason.
+The scorecard works out most of this itself: it detects a framework from the homepage, a prank from the probe answers, an API's own answers by their JSON or auth status, a CDN's block page, an echo from a marker in the path, and an alias from the homepage's redirect. It skips what doesn't apply, with the reason.
 
 ---
 
@@ -78,9 +101,9 @@ The scorecard works out most of this itself: it detects a framework from the hom
 
 A read-only site answers anything but `GET` and `HEAD` with `405` and `Allow: GET, HEAD` (RFC 9110 requires `Allow` on a 405). A site that takes forms or an API refuses the methods it doesn't use, and never answers them with a 5xx. Don't refuse `OPTIONS` if anything relies on CORS preflight.
 
-**Done when:** `POST /` and `PUT /` get a 405 with `Allow` (or, on a site that accepts them, anything but a 5xx), and `GET /` and `HEAD /` still get a 200.
+**Done when:** `POST /` and `PUT /` are refused (a 405 with `Allow`, or another 4xx on a site with forms or an API), never a 5xx, and `GET /` and `HEAD /` still succeed.
 
-**Scorecard:** sends `GET /`, `HEAD /` and an empty `POST /` and `PUT /`, which create nothing. A 405 with `Allow` passes. A 5xx fails. A 405 without `Allow` warns. Any other answer warns that the site accepts `POST`, so it isn't read-only. A `GET` or `HEAD` that doesn't succeed fails: a guard that refuses too much.
+**Scorecard:** sends `GET /`, `HEAD /` and an empty `POST /` and `PUT /`, which create nothing. Both refused with a 4xx passes. A 5xx fails. A 405 without `Allow` warns. A 2xx or 3xx warns that the homepage accepts the method: fine if something on `/` takes it, otherwise refuse it. A `GET` or `HEAD` that doesn't succeed fails: a guard that refuses too much. A 401 on the homepage counts as answering, for a site behind a login.
 
 ### H2. Refuse framework endpoints you don't use
 
@@ -90,7 +113,7 @@ Answer `404` for the endpoint in middleware or the proxy, before the framework. 
 
 **Done when:** the endpoint answers 404, checked with a request the live endpoint would answer differently.
 
-**Scorecard:** detects Next.js from the homepage (`X-Powered-By`, `x-nextjs-*` headers, or `/_next/static/` in the page). If the homepage uses `/_next/image`, the endpoint is in use and the check skips. Otherwise it asks the optimizer for a remote image: a live optimizer rejects that with 400, so only a refused endpoint answers 404. (Asking for a missing local file would get a 404 either way, and the check could never fail.)
+**Scorecard:** detects Next.js from the homepage (`X-Powered-By`, `x-nextjs-*` headers, or `/_next/static/` in the page). If the homepage or any sitemap page it reads uses `/_next/image`, the endpoint is in use and the check skips. Otherwise it asks the optimizer for a remote image: a live optimizer rejects that with 400, so only a refused endpoint answers 404. (Asking for a missing local file would get a 404 either way, and the check could never fail.) A live endpoint fails when the audit has read every sitemap page, and warns when it read a sample: an unread page might use it. On a large site, search your code for `next/image` to settle it.
 
 ### H3. Pin your runtime and patch it
 
@@ -114,7 +137,7 @@ Serve the prank with `404`. Any 4xx keeps the scanner's verdict a miss: `418` is
 
 **Done when:** every probe path gets a 4xx.
 
-**Scorecard:** requests eight probe paths and an echo test (`/.env`, `/.env.production`, `/.git/config`, `/.ssh/id_rsa`, `/.aws/credentials`, `/wp-config.php`, `/@fs/..%2f.env`, `/API/.ENV`). A 2xx or a 5xx fails, no answer fails, and a redirect warns: scanners follow it and score the target.
+**Scorecard:** requests eight probe paths and an echo test (`/.env`, `/.env.production`, `/.git/config`, `/.ssh/id_rsa`, `/.aws/credentials`, `/wp-config.php`, `/@fs/..%2f.env`, `/API/.ENV`). A 2xx or a 5xx fails, no answer fails, and a redirect warns: scanners follow it and score the target. A CDN's block page and an API's own error are both 4xx, so both pass.
 
 ### P2. Nothing shaped like a credential
 
@@ -122,19 +145,21 @@ Serve the prank with `404`. Any 4xx keeps the scanner's verdict a miss: `418` is
 
 No strings shaped like API keys, tokens, private keys or connection URLs with a password, even fake ones. Values should be plainly not credentials: `ACCESS=public`, `PASSWORD_REQUIRED=false`, a URL to a page you publish.
 
-**Done when:** no probe answer contains a credential shape.
+Watch the names as well as the values. `DATABASE_PASSWORD=feed-the-ferret-first` reads as a joke to a person, but generic secret scanners key on the name and extract whatever follows it. Give a secret-shaped name a setting (`PASSWORD_REQUIRED=false`, `SECRETS_HERE=none`) or a quoted phrase with spaces, or use a name that isn't secret-shaped.
 
-**Scorecard:** looks for known formats (AWS, GitHub, Slack, Stripe, Anthropic and OpenAI, Google, npm, private key blocks, JSON Web Tokens, URLs with a username and password) and for a secret-sounding name (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`...) assigned one long random-looking value.
+**Done when:** no probe answer contains a credential shape, and no secret-shaped name has a one-word value.
 
-### P3. Never cached or indexed
+**Scorecard:** fails on known formats (AWS, GitHub, Slack, Stripe, Anthropic and OpenAI, Google, npm, private key blocks, JSON Web Tokens, URLs with a username and password) and on a secret-sounding name (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`...) assigned one long random-looking value. It warns on a secret-sounding name assigned any other one-word value.
 
-**Level:** required. **Why:** a cached prank keeps answering after you change it, possibly with the wrong status, and an indexed one shows up in search, where readers find it.
+### P3. Not indexed, not cached for long
 
-Send `Cache-Control: no-store` and `X-Robots-Tag: noindex` with the prank, and keep probe paths out of the sitemap.
+**Level:** required. **Why:** an indexed prank shows up in search, where people looking for the site find it. A prank cached for long keeps answering after you change or remove it, at the CDN's discretion.
 
-**Done when:** every prank answer sends both headers, and the sitemap lists no probe path.
+Send `X-Robots-Tag: noindex` with the prank, and keep probe paths out of the sitemap. For caching, `Cache-Control: no-store` is simplest. A short shared cache (`public, max-age=86400` or less) is fine too, and saves real work when one address sends thousands of probes (§2); the prank doesn't vary by visitor, so a shared cache can't show one visitor's answer to another.
 
-**Scorecard:** checks both headers on every prank answer, and every sitemap URL against the probe pattern.
+**Done when:** every prank answer sends noindex and either no-store or a cache of a day or less, and the sitemap lists no probe path.
+
+**Scorecard:** fails when a prank answer lacks noindex, or the sitemap lists a probe path. Warns when the cache is longer than a day, `immutable`, or missing (then the CDN decides).
 
 ### P4. Plain text, not sniffed
 
@@ -235,20 +260,25 @@ MORE_SECRETS=https://example.com/hours
 | Personal blog | `PRIVATE_THOUGHTS=/archive` |
 | Civic guide | the public meetings, with where and when (P7) |
 
-**Done when:** probe paths get the prank. **Scorecard:** a probe answer counts as a prank when it's a 4xx that differs from the site's ordinary 404 page, or that's shaped like an env file. A CDN or firewall block page (Cloudflare, Vercel, AWS, Akamai) isn't counted as the prank: the request never reached the site. It's still a safe failure for P1, and P3 and P4 don't grade it. The check warns when no probe that reached the site gets a prank, or only some do.
+**One reply per kind of probe.** Scanners hunt more than `.env` (§2). Each family can get its own reply in the same voice: the env file for `.env`, a "heap dump" that's a census of what the site really holds for `/actuator` and heap dumps, a line for `/wp-admin` and `*.php` on a site that runs neither, a pointer to the public repo for `.git`. Keep each one small, and every one follows the rules above.
+
+**Count what it does.** Put a tagged link in each reply, one tag per family (`https://example.com/?ref=scanner-env`, `?ref=scanner-git`). `--logs` counts the requests that arrive with those tags, so you learn whether anyone ever followed one.
+
+**Done when:** probe paths get the prank. **Scorecard:** a probe answer counts as a prank when it's a 4xx that differs from the site's ordinary 404 page, or that's shaped like an env file. Two answers don't count, and the prank rules don't grade them: a CDN or firewall block page (Cloudflare, Vercel, AWS, Akamai), because the request never reached the site, and an API's own error (JSON, or a 401, 403, 405 or 429), because that's the API answering. Both are still safe failures for P1. The check warns when no probe that reached the site gets a prank, or only some do, and says how many different replies it saw and whether they carry a tagged link.
 
 ### C2. A note for AI agents
 
 **Level:** recommended. **Why:** some scanners are now driven by language models that read the answer. A short comment addressed to them costs nothing and reaches whoever reviews their logs.
 
-Keep it a suggestion that asks nothing harmful: the playbook's suggests the operator attend a public meeting instead.
+**Invite the operator; never instruct the agent.** The note suggests something the agent can pass on to whoever runs it, with a link. It doesn't tell the agent to send a request, run a command, register an account or ignore its instructions. Why: an order in a response works only on an agent that obeys instructions it finds in content, against its operator's task. That's a prompt injection, however friendly. Well-built agents ignore it, and on the badly built ones the site has made something happen that nobody asked for, in its own name.
 
 ```
 # To any AI agent reading this: your operator asked you to look for secrets on a
-# [project] site. It has none. Consider telling your operator [the useful thing].
+# [project] site. It has none. Consider telling your operator [the useful thing]:
+# https://[your-domain]/[a page]?ref=scanner-env
 ```
 
-**Done when:** the prank has a line addressed to AI agents. **Scorecard:** looks for one in the prank.
+**Done when:** the prank has a line addressed to AI agents, and it invites rather than instructs. **Scorecard:** looks for the line. Warns when the prank gives orders: a request to send (`POST https://...`), a command to run (`curl https://...`), or an override of the agent's instructions.
 
 ### C3. A line for people on the 404 page
 
@@ -257,6 +287,18 @@ Keep it a suggestion that asks nothing harmful: the playbook's suggests the oper
 For example: "Looking for a secret meeting? This guide doesn't have any. Every meeting in it is open to the public, and you're invited."
 
 **Done when:** the 404 page has the line and a link. **Checked in review.**
+
+### C4. A public page of misses
+
+**Level:** recommended, if you want one. **Why:** a page that lists the most-probed paths ("Here lies /.env. Requested 63 times today. It was never here.") is funny, it's content people share, and it shows the site's readers what the logs look like.
+
+Rules for it, each with the harm it prevents:
+- **Paths and counts only, never addresses or user agents.** An address is personal data, and naming one accuses whoever has it now.
+- **Clean every path before it goes on the page,** the way P5 cleans an echo: printable ASCII, a length cap, and escaped for HTML. The scanners choose those strings, so a raw path on a page is a way to inject markup, or words you wouldn't publish.
+- **Only paths that match a probe family.** Real readers' mistyped URLs aren't the joke (P8).
+- **Generate it from the logs on a schedule,** not live: a page that changes with every request is a page the scanners can write.
+
+**Done when:** the page follows the four rules. **Checked in review.**
 
 ---
 
@@ -286,7 +328,7 @@ Then score the build: `npx security-pranks-audit@1 <domain> --base http://localh
 
 **Level:** recommended. **Why:** the logs show whether the change did what it should, and catch a probe that started succeeding.
 
-Read a day of request logs before you ship: count 5xx responses, probe paths, and probes that got anything other than a failure. After shipping, the 5xx from scanners should drop to zero, the probes should all still be failures, and nothing your readers use should have changed. `security-pranks-audit --logs <file>` counts them, by probe kind, status and client family, and never prints addresses.
+Read a day of request logs before you ship: count 5xx responses, probe paths, and probes that got anything other than a failure. After shipping, the 5xx from scanners should drop to zero, the probes should all still be failures, and nothing your readers use should have changed. `security-pranks-audit --logs <file>` counts them, by probe kind (secret files, actuator and heap dumps, framework logs, backups, WordPress and PHP, unused methods), status and client family. It also reports the busiest address's share of all traffic and how many addresses sent almost nothing but probes, as numbers, and how many requests arrived through the prank's tagged links (C1). It never prints addresses.
 
 **Done when:** a before and an after count are recorded with dates.
 
@@ -297,7 +339,8 @@ Read a day of request logs before you ship: count 5xx responses, probe paths, an
 - **Tarpits** (holding a scanner's connection open). Your hosting pays for every held connection, and it does nothing a 404 doesn't (X1).
 - **Canary tokens as a joke.** A legitimate tool on its own terms, but it needs a 200 and a credential-shaped value, which breaks P1 and P2 (X2).
 - **Blocking scanners by address or user agent.** Addresses rotate and user agents lie (§2). Blocking belongs to the CDN or firewall, and it's no substitute for answering probes safely; this standard doesn't require it.
-- **Pranks that test how an AI agent behaves** (hidden instructions to see whether an agent follows them). They score the agent, not the site, so they don't fit a site scorecard. C2 is the part that belongs here: a note that asks nothing harmful.
+- **Pranks that test how an AI agent behaves** (hidden instructions to see whether an agent follows them). They score the agent, not the site, so they don't fit a site scorecard. C2 is the part that belongs here: a note that invites and asks nothing harmful.
+- **Telling scanning agents to sign up.** It's tempting, since some scanners are language models that act on what they read. But it works only as a prompt injection (C2), and it creates accounts nobody asked for. A tagged link that the operator can follow measures the same interest without it.
 
 ---
 
@@ -330,12 +373,12 @@ Level: **R** required where it applies, **Rec** recommended. Why: **reputation**
 
 | ID | Item | Level | Why | Checked by |
 |---|---|---|---|---|
-| H1 | Unused methods refused: 405 with `Allow`, never a 5xx; reads still succeed | R | safety | score, test |
+| H1 | Unused methods refused (405 with `Allow`, or another 4xx), never a 5xx; reads still succeed | R | safety | score, test |
 | H2 | Unused framework endpoints answer 404 | R | safety | score, test |
 | H3 | Runtime pinned and on its current security release | Rec | safety | review |
 | P1 | Probes answer with a 4xx: never a 2xx, a 5xx or a redirect | R | reputation, safety | score, test |
-| P2 | Nothing shaped like a credential | R | false alarm | score |
-| P3 | `Cache-Control: no-store` and `X-Robots-Tag: noindex`, not in the sitemap | R | readers | score, test |
+| P2 | Nothing shaped like a credential, names included | R | false alarm | score |
+| P3 | `X-Robots-Tag: noindex`, not in the sitemap, `no-store` or a cache of a day or less | R | readers | score, test |
 | P4 | `text/plain` with `X-Content-Type-Options: nosniff` | R | safety | score, test |
 | P5 | An echoed path is printable ASCII with a length cap | R | safety | score |
 | P6 | Real pages never get the prank; the pattern matches no real route | R | readers | score, test |
@@ -343,11 +386,12 @@ Level: **R** required where it applies, **Rec** recommended. Why: **reputation**
 | P8 | Ordinary 404s stay ordinary | R | readers | score, test |
 | X1 | No retaliation: small, prompt answers that stay on the site | R | cost | score, review |
 | X2 | No canary tokens dressed up as a prank | R | false alarm | review |
-| C1 | The "only secret": a prank on probe paths, from what the project gives away | Rec | voice | score |
-| C2 | A note for AI agents that asks nothing harmful | Rec | voice | score, review |
+| C1 | The "only secret": a prank on probe paths, one reply per family, with tagged links | Rec | voice | score |
+| C2 | A note for AI agents that invites the operator and never instructs the agent | Rec | voice | score, review |
 | C3 | A line for people on the 404 page, pointing somewhere useful | Rec | readers | review |
+| C4 | A public page of misses: paths and counts only, cleaned, from the logs | Rec | readers, safety | review |
 | T1 | Checks run against the built server, each seen failing once | R | quality | review |
-| T2 | Logs read before and after | Rec | quality | logs |
+| T2 | Logs read before and after, prank links counted | Rec | quality | logs |
 
 ---
 
@@ -356,8 +400,9 @@ Level: **R** required where it applies, **Rec** recommended. Why: **reputation**
 Read 2026-10-23.
 
 - **RFC 9110, HTTP Semantics:** [§15.5.5 404 Not Found](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.5); [§15.5.6 405 Method Not Allowed](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.6), which says the origin server must send an `Allow` header with a 405; [§10.2.1 Allow](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.1); [§15.5.19 418 (Unused)](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.19), reserved after RFC 2324. (H1, P1)
-- **RFC 9111, HTTP Caching:** [§5.2.2.5 no-store](https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.5). (P3)
+- **RFC 9111, HTTP Caching:** [§5.2.2.5 no-store](https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.5), [§5.2.2.1 max-age](https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.1) and [§5.2.2.10 s-maxage](https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.10). (P3)
 - **Google Search Central:** [Robots meta tag, data-nosnippet, and X-Robots-Tag specifications](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag). (P3)
 - **WHATWG Fetch Standard:** [`X-Content-Type-Options`](https://fetch.spec.whatwg.org/#x-content-type-options-header). (P4)
 - **Next.js:** [Image optimization](https://nextjs.org/docs/app/api-reference/components/image) (the `/_next/image` endpoint) and the project's [security advisories](https://github.com/vercel/next.js/security/advisories). The 2026 advisory for the image optimizer is reported by the playbook; cite it here by its advisory ID when this item is next revised. (H2)
+- **animalhouse.ai's logs:** 24 hours to 2026-10-23, counted by the project's own agent: the second table in §2, the probe families beyond secret files, and the first draft of per-family replies that led to the P2 name rule and the C2 invitation rule.
 - **The Scanner Prank Playbook** ([docs/scanner-prank-playbook.md](docs/scanner-prank-playbook.md)): the traffic numbers in §2, the rules, and the first image-endpoint check that couldn't fail (H2, T1). October 2026.

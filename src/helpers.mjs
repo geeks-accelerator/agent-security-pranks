@@ -42,6 +42,26 @@ export function probeFamily(pathname) {
 }
 
 /**
+ * Other probe families for --logs: weak spots scanners hunt that aren't secret files. The audit
+ * doesn't probe these (a site that serves PHP or zip downloads has real traffic here), so --logs
+ * reports them on their own, with that caveat. Matched against the decoded, lowercased path.
+ */
+export const OTHER_PROBE_FAMILIES = [
+  ['Spring actuator and heap dumps', /\/actuator(\/|$)|heapdump|\/jolokia(\/|$)/],
+  ['framework logs and debug pages', /laravel\.log$|\/storage\/logs\/|\/_profiler(\/|$)|\/telescope(\/|$)|phpinfo|\/debug\.log$|\/server-status$|\/elmah\.axd$/],
+  ['backups and dumps', /\.(sql|bak|old|swp)$|\/(backup|www|site|db|database|dump)\.(zip|tar\.gz|tgz|rar|7z|sql)$|\/backups?(\/|$)/],
+  ['WordPress and PHP', /\/wp-(admin|login|content|includes)|xmlrpc\.php|\.php($|\/)/],
+];
+
+/** Which probe family a path belongs to: a secret family first, then the others, else null. */
+export function knownProbe(pathname) {
+  const secret = probeFamily(pathname);
+  if (secret) return secret;
+  const p = decodedPath(pathname);
+  return OTHER_PROBE_FAMILIES.find(([, re]) => re.test(p))?.[0] ?? null;
+}
+
+/**
  * Framework endpoints that answer even when no page uses them (H2). Each entry: how to tell the
  * framework from the homepage, how to tell the site uses the endpoint, and a request the endpoint
  * would answer with something other than 404 if it's live. The request asks the optimizer for a
@@ -100,6 +120,56 @@ export function credentialShapes(text) {
   return [...found];
 }
 
+// Values that read as settings, not secrets: a person and a secret scanner both see them as such.
+const PLAIN_VALUES = /^(true|false|yes|no|none|null|nil|public|open|off|on|required|optional|n\/a|-?\d+)$/i;
+
+/**
+ * Secret-named keys given a one-word value, like PASSWORD=feed-the-ferret-first (P2, a warning).
+ * A person reads it as a joke; a generic secret scanner keys on the name and extracts the value.
+ * Fine: a quoted phrase with spaces, a URL or path, or a plain setting (PASSWORD_REQUIRED=false).
+ */
+export function secretAssignments(text) {
+  const found = [];
+  for (const m of String(text).matchAll(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*[=:]\s*(["']?)([^\n#]*?)\2\s*(?:#.*)?$/gm)) {
+    const [, name, , value] = m;
+    if (!/(^|_)(key|secret|token|passw(or)?d|pwd|pass|credentials?|auth|api_?key|private_?key)(_|$)/i.test(name)) continue;
+    if (/\s/.test(value) || value.length < 6 || PLAIN_VALUES.test(value) || /^(https?:\/\/|\/)/i.test(value)) continue;
+    found.push(name);
+  }
+  return [...new Set(found)];
+}
+
+/**
+ * What's wrong with a prank's Cache-Control (P3), or null. no-store is best; a short shared cache
+ * (a day or less) is fine and saves work when one address sends thousands of probes. Longer, or
+ * none at all, and an old prank keeps answering after you change it, at the CDN's discretion.
+ */
+export const MAX_CACHE_SECONDS = 86400;
+export function cacheProblem(header) {
+  const h = String(header ?? '').toLowerCase();
+  if (/no-store|no-cache|private/.test(h)) return null;
+  if (!h) return 'no Cache-Control, so the CDN decides how long it lives';
+  const ages = [...h.matchAll(/(?:s-maxage|max-age)\s*=\s*(\d+)/g)].map((m) => Number(m[1]));
+  if (/immutable/.test(h)) return 'Cache-Control: immutable';
+  if (!ages.length) return `Cache-Control: ${h} sets no lifetime`;
+  const longest = Math.max(...ages);
+  return longest > MAX_CACHE_SECONDS ? `cached for ${Math.round(longest / 3600)} hours (keep it to a day or less, or no-store)` : null;
+}
+
+/**
+ * Lines in a prank that tell an agent to act (C2, a warning): a request to send, a command to run.
+ * An invitation to the operator, with a link, keeps the joke without relying on an agent that
+ * follows instructions it finds in a response.
+ */
+export function instructsAgent(text) {
+  const t = String(text);
+  const found = [];
+  if (/\b(POST|PUT|PATCH|DELETE)\s+(https?:\/\/|\/)/.test(t)) found.push('a request to send');
+  if (/\b(curl|wget)\b[^\n]*\shttps?:\/\//i.test(t)) found.push('a command to run');
+  if (/\b(ignore|disregard)\s+(all\s+|your\s+)?(previous|prior)\s+(instructions|prompts?)/i.test(t)) found.push('an override of its instructions');
+  return found;
+}
+
 /**
  * The CDN or firewall that blocked a request before it reached the site, or null. A block is a
  * safe failure (P1), but it isn't the site's prank, so the prank rules don't grade it.
@@ -114,6 +184,9 @@ export function edgeBlock(r) {
   if (/akamai/i.test(h.get('server') ?? '') && /access denied/i.test(title)) return 'Akamai';
   return null;
 }
+
+/** A link in a prank tagged so follow-through can be counted (C1, T2): ?ref=scanner-..., source=scanner:... */
+export const SCANNER_TAG = /[?&](ref|source|utm_source)=scanner[-:_.\w]*/i;
 
 /**
  * A probe answer with the requested path removed, so a page that echoes the path compares

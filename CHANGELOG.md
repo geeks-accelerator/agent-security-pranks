@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.1.0 (unreleased)
+
+Fits every kind of site one owner runs (static guides, apps with an API and forms, sites behind a login, alias domains), and adds what a day of animalhouse.ai's logs and its agent's first draft of per-family pranks taught. No check newly fails a site that passed 1.0.0; some can newly warn, so a recommended or required score can drop. `@1` pins keep working.
+
+**Can newly warn (scores can drop):**
+- **P2** warns on a secret-shaped name (`SECRET_KEY`, `DATABASE_PASSWORD`, `ADMIN_TOKEN`) given a one-word value. A person reads it as a joke; generic secret scanners key on the name and extract it.
+- **P3** warns when a prank is cached for more than a day, marked `immutable`, or sent with no Cache-Control.
+- **C2** warns when the prank gives the agent orders: a request to send, a command to run, or an override of its instructions. Invite the operator, with a link, instead.
+
+**Looser (fewer false failures):**
+- **P3 no longer requires `no-store`.** A shared cache of a day or less is fine, and saves real work when one address sends thousands of probes. noindex and the sitemap rule still fail. The check is renamed "Not indexed, not cached for long".
+- **H1 passes any 4xx refusal** of `POST /` and `PUT /`, not only a 405: a site with forms or an API often answers 404. A 2xx or 3xx warns; a 5xx still fails. A 401 homepage counts as answering, for sites behind a login.
+- **An API's own errors aren't graded as the prank.** A JSON answer, or a 401, 403, 405 or 429, on a probe like `/API/.ENV` is the API answering. It passes P1 and is left out of P3, P4 and C1's count.
+- **H2 looks for `next/image` on the sitemap pages it reads,** not only the homepage, and fails only when it has read every sitemap page; on a larger site it warns. At animalhouse.ai, `/how-it-works` uses the optimizer while the homepage doesn't, and 1.0.0 failed it wrongly.
+- **An alias domain** whose homepage redirects to another site is reported as "redirects to" its target instead of scored. **A CDN that blocks the audit itself** is reported as a warning naming the CDN, instead of scoring its block page.
+
+**New:**
+- **C1** reports how many different replies the prank has and whether they carry a tagged link (`?ref=scanner-env`).
+- **C4** (review): a public page of misses, with its rules.
+- **`--logs`** counts actuator and heap dumps, framework logs, backups, and WordPress and PHP as probe families; splits traffic into probes, other misses and the rest; reports the busiest address's share of traffic and how many addresses sent almost only probes (counts, never addresses); and counts requests that arrived through the prank's tagged links.
+- **STANDARD.md:** a §3 table for each kind of site, animalhouse.ai's day of logs in §2, one reply per probe family and tagged links (C1), "invite the operator, never instruct the agent" (C2), and the caching rule (P3). Recipes for exempting real content prefixes, per-family replies and the page of misses.
+
 ## 1.0.0 (2026-10-23)
 
 The first release: the Agent Security Pranks Standard and its scorecard, built from the Scanner Prank Playbook.
