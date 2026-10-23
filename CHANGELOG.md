@@ -16,6 +16,11 @@ From a second review, each scorecard fix reproduced on a fixture site before it 
 - **The playbook copy** follows the standard: a cache of a day or less is allowed (P3), and `OPTIONS` isn't refused when anything relies on CORS preflight.
 - **STANDARD.md:** the impersonator's 308k requests and its 39% of probes are no longer run together (173k of the 308k were probes); the logs were about 16 hours, from prerendered sites; the Cloudflare AI bot group names are marked as secondary reports; the request counts include the sitemap pages; three claims with no source are reworded or dropped ("flagged by security vendors", "within hours", and how many tools log headers), and the runtime lag now cites the measured case.
 
+**From adopting the standard on achurch.ai,** whose ordinary 404 answers every missing path, probes included:
+- **An ordinary 404 that echoes a capped or cleaned path is no longer scored as a prank.** The echo test asks for a 600-character path with a line break and a tag in it. A site that caps or cleans the echo, as P5 asks, sent back only part of it, so the path couldn't be taken out of the answer and the answer didn't match the ordinary 404: the scorecard reported "Prank found: yes" while C1 found none, failed P3 for a prank that wasn't there, and passed C2 for it. `withoutPath` now also removes the longest start of the path the answer holds (12 characters or more), as sent, decoded, and decoded with what isn't printable taken out. Fewer false failures only; no check newly fails. A new fixture site, `plain`, has no prank and an ordinary 404 that echoes a capped path.
+- **P3's reason says what P1 already does.** A 4xx keeps a prank out of Google's index, which drops 4xx URLs (cited in §12); noindex is the backstop for the day it's served with a 200. P3 stays required, and its failure message says the same.
+- **docs/adopting.md:** a site whose ordinary 404 already answers every probe well can let it be the whole answer and decline C1, with noindex and a short cache on the 404 anyway. The one-line prompt (here and in the README) suggests a release tag in place of `main`, so the agent follows the text the owner reviewed.
+
 ## 1.1.4 (2026-10-23)
 
 The standard sets rules, not values: the prank's wording, variable names, header names, link tags and page names are each project's own.

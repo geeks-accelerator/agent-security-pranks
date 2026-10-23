@@ -4,6 +4,8 @@ To switch a project over, give its coding agent one line:
 
 > Adopt the Agent Security Pranks Standard in this repo by following https://github.com/geeks-accelerator/agent-security-pranks/blob/main/docs/adopting.md
 
+The agent reads this page when it runs, not when you read it. To have it follow the text you reviewed, put a release tag in place of `main` (`blob/v1.1.3/docs/adopting.md`).
+
 Everything below is for that agent. The lessons at the end come from the sites that switched over first.
 
 **Scope:** a website the owner runs and manages, where you can change how it answers. A parked or redirect-only domain has nothing to answer with: skip it. **Values:** the standard is written for a site that welcomes every AI agent and crawler, verified or not. Ask the owner whether theirs does before you change any bot setting; that's their decision. Either way, nothing you add for this standard may block, challenge or slow a visitor for its user agent, its claimed name or its verified status (X3). Answer what a request asks for.
@@ -38,6 +40,7 @@ Everything below is for that agent. The lessons at the end come from the sites t
    - Keep every probe answer a 4xx, even on a static site with nothing to leak: a 200 is read as "found" whatever the body says (P1).
    - End the note with a link to `/.well-known/security.txt`, and serve that file if the site doesn't yet: a real inbox and an `Expires` under a year ahead ([recipes.md](recipes.md)). Ask the owner which address to use, and never guess or invent one: a researcher's report sent to an inbox nobody reads is lost. If the owner has no address to give, leave out the link and the file. The joke is for scanners; a real researcher needs a way to report.
    - A prank is optional. If the owner doesn't want one, skip this step, record C1 as declined with the reason, and do the rest: the hardening and the rules are what keep the site safe.
+   - If the site's ordinary 404 already answers every probe well (a 4xx, plain text with `nosniff`, small, nothing shaped like a credential, the echoed path cleaned and capped, and a line that invites rather than orders), it can be the whole answer. Record C1 as declined with that reason, and keep it ordinary: the scorecard counts an answer as a prank only when it differs from the ordinary 404, and P8 fails a prank that leaks into it. Give the 404 `X-Robots-Tag: noindex` and a cache of a day or less anyway, on every path: it's what P3 asks of a prank, and it's free.
 
 5. **Add the guard** behind the probe pattern: status 404, `X-Robots-Tag: noindex`, `Content-Type: text/plain`, `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store` or a cache of a day or less (P1, P3, P4). If you echo the path, strip it to printable ASCII and cap its length (P5). Every other missing page keeps the normal 404 (P8). Run the pattern over every real route first, and narrow it if anything matches (P6).
 
