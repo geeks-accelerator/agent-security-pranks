@@ -152,6 +152,32 @@ app.use((req, res, next) => {
 
 ## nginx
 
+nginx answers a `POST` to a static file with 405 on its own, but with no `Allow` header, which RFC 9110 requires on every 405. `add_header` is not allowed in an `if` at server level, so the header goes on a named location that `error_page` sends the 405 to.
+
+```nginx
+# H1: refuse every method a read-only site doesn't use, with 405 and Allow.
+# The map goes at http level (a file in conf.d/ is). Exempt your API's prefix,
+# or drop that line on a site with none, so its POSTs still reach it.
+map "$request_method:$uri" $method_refused {
+    default          1;
+    "~^(GET|HEAD):"  0;
+    "~^[A-Z]+:/api/" 0;
+}
+
+server {
+    # ...
+    error_page 405 = @method_not_allowed;
+    location @method_not_allowed {
+        default_type text/plain;
+        add_header Allow "GET, HEAD" always;
+        return 405 "This site is read-only.\n";
+    }
+    if ($method_refused) { return 405; }
+}
+```
+
+The prank goes in the same `server`, as its own `location`:
+
 ```nginx
 location ~* (/\.env|/\.git(/|$)|/\.ssh/|/\.aws/|/id_(rsa|ed25519)|wp-config\.php) {
     default_type text/plain;
