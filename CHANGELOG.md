@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 (unreleased)
+## 1.1.0 (2026-10-23)
 
 Fits every kind of website one owner runs and manages (static guides, news sites, apps with an API and forms, sites behind a login), and adds what a day of animalhouse.ai's logs and its agent's first draft of per-family pranks taught. No check newly fails a site that passed 1.0.0; some can newly warn, so a recommended or required score can drop. `@1` pins keep working.
 
