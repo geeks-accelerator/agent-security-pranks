@@ -168,7 +168,7 @@ export function instructsAgent(text) {
   const t = String(text);
   const found = [];
   if (/\b(POST|PUT|PATCH|DELETE)\s+(https?:\/\/|\/)/.test(t)) found.push('a request to send');
-  if (/\b(curl|wget)\b[^\n]*\shttps?:\/\//i.test(t)) found.push('a command to run');
+  if (/\b(curl|wget)\b[^\n]*\s["']?https?:\/\//i.test(t)) found.push('a command to run');
   if (/\b(ignore|disregard)\s+(all\s+|your\s+)?(previous|prior)\s+(instructions|prompts?)/i.test(t)) found.push('an override of its instructions');
   return found;
 }
