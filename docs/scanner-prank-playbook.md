@@ -4,6 +4,8 @@
 
 Most of the traffic on a small public site is robots hunting for leaked secrets. You can answer them with a joke that costs nothing, leaks nothing, and leaves your site safer than before. Here is how to do it without getting hurt.
 
+Each rule is an item in the [Agent Security Pranks Standard](../STANDARD.md), with its ID in brackets, and `npx security-pranks-audit <domain>` checks a live site against them.
+
 ## What is knocking
 
 We measured one day of HTTP logs on a network of eleven small static sites. Most requests had nothing to do with readers.
@@ -21,32 +23,32 @@ The shopping list is always the same: `/.env` in every variation, `/.git/config`
 
 A prank is a garnish. The useful part is refusing what your site never needs, so the next vulnerability in that code path cannot reach you whatever it turns out to be.
 
-- **Refuse methods you do not use.** A read-only site answers anything but `GET` and `HEAD` with `405` and `Allow: GET, HEAD`. On our sites this turned framework 500s with stack traces in the log into clean refusals.
-- **Refuse framework endpoints you do not use.** Next.js serves its image optimizer at `/_next/image` even if no page uses it, and that endpoint carried a critical remote-code-execution advisory in 2026. Return `404` for it.
-- **Pin your runtime and patch it.** If nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release by days.
+- **Refuse methods you do not use (H1).** A read-only site answers anything but `GET` and `HEAD` with `405` and `Allow: GET, HEAD`. On our sites this turned framework 500s with stack traces in the log into clean refusals.
+- **Refuse framework endpoints you do not use (H2).** Next.js serves its image optimizer at `/_next/image` even if no page uses it, and that endpoint carried a critical remote-code-execution advisory in 2026. Return `404` for it.
+- **Pin your runtime and patch it (H3).** If nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release by days.
 
 ## The ground rules
 
 A prank on a public domain speaks in your name. These keep it a joke.
 
-- **Keep the status a failure.** Serve the joke with `404`, never `200`. Scanners score by status code. A `200` on `/.env` marks you as "found something" on shared target lists, brings more traffic, and can get the domain flagged by security vendors.
-- **Never make anything look like a real credential.** No strings shaped like API keys, tokens or connection URLs. Anything a scanner's regex would extract as a secret is a false alarm for someone else to chase.
-- **Never cache or index it.** Send `Cache-Control: no-store` and `X-Robots-Tag: noindex`, and keep it out of the sitemap.
-- **Serve plain text.** Use `Content-Type: text/plain` with `X-Content-Type-Options: nosniff`. If you echo the requested path back, strip it to printable ASCII and cap its length first, because the scanner controls it.
-- **Match narrowly and prove it.** Run your pattern over every real route you serve and require zero matches. Then run it over your logs to see what it catches.
-- **If the joke states facts, quote them.** Ours lists real public meetings. A test fails if any quoted time or place does not appear word for word in the published source.
-- **Leave ordinary 404s alone.** A reader who mistypes a URL must never see the prank. Test that too.
+- **Keep the status a failure (P1).** Serve the joke with `404`, never `200`. Scanners score by status code. A `200` on `/.env` marks you as "found something" on shared target lists, brings more traffic, and can get the domain flagged by security vendors.
+- **Never make anything look like a real credential (P2).** No strings shaped like API keys, tokens or connection URLs. Anything a scanner's regex would extract as a secret is a false alarm for someone else to chase.
+- **Never cache or index it (P3).** Send `Cache-Control: no-store` and `X-Robots-Tag: noindex`, and keep it out of the sitemap.
+- **Serve plain text (P4, P5).** Use `Content-Type: text/plain` with `X-Content-Type-Options: nosniff`. If you echo the requested path back, strip it to printable ASCII and cap its length first, because the scanner controls it.
+- **Match narrowly and prove it (P6).** Run your pattern over every real route you serve and require zero matches. Then run it over your logs to see what it catches.
+- **If the joke states facts, quote them (P7).** Ours lists real public meetings. A test fails if any quoted time or place does not appear word for word in the published source.
+- **Leave ordinary 404s alone (P8).** A reader who mistypes a URL must never see the prank. Test that too.
 
-- **No retaliation.** No zip bombs, no tarpits, no redirects that point bots at someone else's site, nothing that attacks back. Your hosting bill pays for tarpits, and anything that harms the visitor stops being a prank.
-- **No traps that need a 200.** Canary tokens (fake keys that alert you when used) are a legitimate security tool, but they only work if the scanner believes it found a secret, which breaks the first rule. Use them on purpose, not as a joke.
+- **No retaliation (X1).** No zip bombs, no tarpits, no redirects that point bots at someone else's site, nothing that attacks back. Your hosting bill pays for tarpits, and anything that harms the visitor stops being a prank.
+- **No traps that need a 200 (X2).** Canary tokens (fake keys that alert you when used) are a legitimate security tool, but they only work if the scanner believes it found a secret, which breaks the first rule. Use them on purpose, not as a joke.
 
 ## The menu
 
 Ranked by how well they hold up.
 
-1. **The only secret you have.** Answer secret hunting with an env file of something your project already gives away freely. For a civic guide that is its public meetings. It is funny, it is true, and it is a small public service. Examples follow below.
-2. **A note for AI agents.** Some scanners are now driven by language models that read the response. A short comment addressed to them costs nothing and reaches whoever reviews their logs.
-3. **A line for humans on the 404 page.** Keep it in the product's voice and point somewhere useful. Ours reads: "Looking for a secret meeting? This guide doesn't have any. Every meeting in it is open to the public, and you're invited."
+1. **The only secret you have (C1).** Answer secret hunting with an env file of something your project already gives away freely. For a civic guide that is its public meetings. It is funny, it is true, and it is a small public service. Examples follow below.
+2. **A note for AI agents (C2).** Some scanners are now driven by language models that read the response. A short comment addressed to them costs nothing and reaches whoever reviews their logs.
+3. **A line for humans on the 404 page (C3).** Keep it in the product's voice and point somewhere useful. Ours reads: "Looking for a secret meeting? This guide doesn't have any. Every meeting in it is open to the public, and you're invited."
 4. **A themed status code.** `418 I'm a teapot` is a classic and harmless. It is still a 4xx, so scanners record a miss. It is also less funny than a message.
 
 ### What we serve at `/.env`
@@ -171,7 +173,7 @@ location ~* (/\.env|/\.git(/|$)|/\.ssh/|/\.aws/|/id_(rsa|ed25519)|wp-config\.php
 }
 ```
 
-## Ship it with checks
+## Ship it with checks (T1)
 
 Each of these should run against the built server, and each should be shown failing once with the feature turned off. A check that has never failed has not been tested.
 
@@ -186,8 +188,8 @@ Each of these should run against the built server, and each should be shown fail
 
 One trap we hit: our first image-endpoint check asked for a missing local file, and the old optimizer also answered that with 404, so the check passed with or without the fix. Asking for a remote URL, which the optimizer rejects with 400, made the check able to fail.
 
-## Measure before and after
+## Measure before and after (T2)
 
-Read a day of request logs first: count 5xx responses, probe paths, and how many probes got anything other than a failure. After shipping, the 5xx from scanners should drop to zero, the probes should still all be 404s, and nothing your readers use should have changed.
+Read a day of request logs first: count 5xx responses, probe paths, and how many probes got anything other than a failure. After shipping, the 5xx from scanners should drop to zero, the probes should still all be 404s, and nothing your readers use should have changed. `npx security-pranks-audit --logs <access-log>` counts them.
 
 Written from a deployment on a network of civic-guide sites, October 2026. Adapt the pattern to your own routes; the rules apply to any stack.

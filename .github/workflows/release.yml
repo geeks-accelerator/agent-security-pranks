@@ -1,0 +1,40 @@
+# Publishes to npm when a GitHub release is published, using npm trusted publishing
+# (OIDC), so no npm token is stored anywhere. One-time setup, after the first manual
+# publish: on npmjs.com, open the package's settings, add a trusted publisher for
+# geeks-accelerator/agent-security-pranks with the workflow file release.yml.
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # trusted publishing; only this job gets it
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+      - name: npm 12 (trusted publishing needs 11.5.1 or later; a major pin, so a new major can't change publishing unannounced)
+        run: npm install -g npm@12
+      - name: The release tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "Release tag v$tag doesn't match package.json version $version"
+            exit 1
+          fi
+      - run: npm publish --access public

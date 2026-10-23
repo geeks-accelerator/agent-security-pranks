@@ -1,0 +1,39 @@
+# Working on agent-security-pranks
+
+This repo publishes the Agent Security Pranks Standard (STANDARD.md) and its scorecard, the `security-pranks-audit` CLI on npm.
+
+## Layout
+
+- `STANDARD.md`: the standard. Every item has an ID (H, P, X, C, T plus a number), a level, a section and a row in the checklist (§11).
+- `src/audit.mjs`: the checks, as a library (`audit`, `score`, `matrix`).
+- `src/helpers.mjs`: pure helpers the checks share (the probe pattern, credential shapes, the echo test, compare), tested without a network. Internal: the package exports only `src/audit.mjs`.
+- `src/http.mjs`: `request()`, the audit's one HTTP request, on `node:http(s)`, with size and time caps.
+- `src/logs.mjs`: `--logs`, which counts probes in an exported access log. It classifies paths with the audit's own pattern (`probeFamily`), so the two can't drift.
+- `bin/security-pranks-audit.mjs`: the command-line tool.
+- `test/`: guard tests, and an end-to-end test that audits two fixture sites on localhost through `--base` (`test/fixture-site.mjs`): one that follows every rule, one that breaks each rule once. A new check or a changed one gets a case in both fixtures and an assertion. `npm test` runs them all, with no outside network.
+- `docs/scanner-prank-playbook.md` (and `.html`): the field guide the standard comes from. `docs/adopting.md`: the switch-over steps a project's agent follows. `docs/recipes.md`: copyable code and guard tests. `docs/plans/`: plans.
+
+## Rules
+
+- **No dependencies.** Node 26 or later (26.12.1 or later, for its security release), built-ins only. All HTTP goes through `request()` in `src/http.mjs`, never `fetch`: it refuses encodings it doesn't decode itself, and it caps every body before and after decoding.
+- **Only the named site.** The audit requests the domain you name and its www or bare twin, never anything a site's answers point to, and never follows a redirect off the site. It may GET anything there, send a HEAD, and send an empty `POST` and `PUT` to `/` that create nothing. Never register, write or log in.
+- **No credential-shaped strings in this repo.** Tests build their samples at run time (`'AK' + 'IA' + ...`), so secret scanners and GitHub push protection don't flag the repo, and nobody chases a fake key (P2 applies to us too).
+- **Every check has an ID that exists in the STANDARD.md checklist,** at the level the checklist gives, and every checklist item marked "score" is scored. The tests fail otherwise. A new check needs its item described in STANDARD.md first.
+- **Every restriction names the harm it prevents.** A restriction added because it feels safe spreads to every project that copies the wording.
+- **Claims cite primary sources** (RFCs, official docs) in §12, with a date.
+- **Examples get copied.** Agents adopting the standard turn its examples into their projects' code. A rule's example is generic or a `[placeholder]`; a real project's values appear only as dated evidence ("on the playbook's sites, ...").
+- **Describe the current rule.** How a rule changed goes in CHANGELOG.md and the commit message.
+- **Writing:** plain, direct sentences. No em dashes (a test checks).
+
+## Git and GitHub
+
+Commits and GitHub operations for this repo use `twinsgeeks <twins@geeksinthewoods.com>`. The repo's local git config sets the identity and a credential helper that uses the `twinsgeeks` GitHub CLI login, so `git commit` and `git push` work as-is. For `gh` commands, prefix `GH_TOKEN=$(gh auth token --user twinsgeeks)`.
+
+## Releasing
+
+1. Change `version` in `package.json` and `VERSION` in `src/audit.mjs` together (a test checks they match).
+2. Add a CHANGELOG entry. A new required check, or a check that can newly fail, is a major version: projects pin a major version (`security-pranks-audit@1`), and a new failure shouldn't reach them unannounced. A new warning is a minor version: it doesn't change the exit code, but it can lower a score, so the changelog says so.
+3. `npm test`, then run the CLI against two or three of our sites and read the output.
+4. Commit, push, and publish a GitHub release tagged `v<version>`. The Release workflow checks the tag against package.json, runs the tests, and publishes to npm through trusted publishing (no token).
+
+The very first publish has to be manual (`npm whoami`, then `npm publish --access public`), because npm's trusted publisher is set on the package's settings page, which exists only after the first publish. Then add the trusted publisher on npmjs.com: repository geeks-accelerator/agent-security-pranks, workflow `release.yml`. The repo must be public before then.

@@ -2,7 +2,13 @@
 
 Written 2026-10-23, from [the playbook](../scanner-prank-playbook.md), using [agent-and-search-readiness](https://github.com/geeks-accelerator/agent-and-search-readiness) and its package [readiness-audit](https://www.npmjs.com/package/readiness-audit) as the model.
 
-**Status (2026-10-23):** only the playbook is in place, in `docs/`. There is no git repo, `package.json`, standard or code yet. Names are settled (below). `security-pranks-audit` was free on npm and `geeks-accelerator/agent-security-pranks` didn't exist on GitHub, as of today. Neither is reserved yet.
+**Status (2026-10-23):** steps 1 to 7 are built: the repo skeleton, STANDARD.md (18 items, 12 scored), the two fixture sites, the CLI with `--matrix`, `--compare`, `--base` and `--logs`, adopting.md, recipes.md, CI and the release workflow. `npm test` passes 30 tests with no outside network. A first run against upstateny.news scored 10 of 10 required and 2 of 2 recommended, after a fix for Cloudflare's WAF blocking `/wp-config.php` (an edge block is now a safe failure, not graded as the prank). The GitHub repo exists (private).
+
+Still open, each needing the owner:
+- **Reserve the npm name** with a manual `0.0.0-stage` publish, then add the trusted publisher on npmjs.com.
+- **Make the repo public** before the 1.0.0 release, and set its description, topics and homepage.
+- **Step 8:** the list of our 10+ sites for `--matrix`, and a day of logs from each for the before and after counts (T2).
+- **H2's source:** cite the 2026 Next.js image optimizer advisory by its ID in §12.
 
 ## Names
 

@@ -1,0 +1,168 @@
+// Pure helpers, tested without a network.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
+import { looksLikePrank } from '../src/audit.mjs';
+import { parseLine, family, probeKind, logTally, formatLogs } from '../src/logs.mjs';
+
+const playbook = readFileSync(new URL('../docs/scanner-prank-playbook.md', import.meta.url), 'utf8');
+const codeBlocks = [...playbook.matchAll(/```\n([\s\S]*?)```/g)].map((m) => m[1]);
+
+test('the probe pattern catches every family the playbook saw, encoded or not', () => {
+  for (const p of [...PROBES, '/.env.local', '/backend/.env', '/.git/HEAD', '/.git-credentials', '/.ssh/id_ed25519.pub', '/id_rsa', '/.aws/config', '/.npmrc', '/.pgpass',
+    '/.docker/config.json', '/proc/self/environ', '/secrets.yml', '/credentials.json', '/.azure/accessTokens.json', '/blog/wp-config.php', '/aws-keys.json', '/%2e%65%6e%76']) {
+    assert.equal(isSecretProbe(p), true, p);
+  }
+});
+
+test('the probe pattern leaves ordinary routes alone', () => {
+  for (const p of ['/', '/about', '/environment', '/environments/list', '/events', '/envelope', '/gitlab', '/.well-known/security.txt', '/docs/secrets-management', '/keys']) {
+    assert.equal(isSecretProbe(p), false, p);
+  }
+});
+
+test('the probe pattern catches some real-looking routes, which is why P6 runs it over the sitemap', () => {
+  // "env" followed by - . _ : or / counts, and so does a bare /credentials. A site with routes like
+  // these narrows the pattern (P6 warns when a sitemap URL matches).
+  for (const p of ['/meetings/env-council', '/env/', '/credentials', '/docs/team-secret.txt']) assert.equal(isSecretProbe(p), true, p);
+});
+
+test('probe families split the pattern for --logs', () => {
+  assert.equal(probeFamily('/.env.production'), 'env files');
+  assert.equal(probeFamily('/.git/config'), 'git');
+  assert.equal(probeFamily('/.ssh/id_rsa'), 'SSH keys');
+  assert.equal(probeFamily('/.aws/credentials'), 'cloud credentials');
+  assert.equal(probeFamily('/wp-config.php'), 'wp-config.php');
+  assert.equal(probeFamily('/proc/self/environ'), 'process environment');
+  assert.equal(probeFamily('/about'), null);
+});
+
+test('the playbook\'s own examples carry no credential shapes', () => {
+  const envExample = codeBlocks.find((b) => b.includes('SECRET_MEETING_1'));
+  assert.ok(envExample, 'the playbook has its /.env example');
+  assert.deepEqual(credentialShapes(envExample), []);
+  for (const v of ['SECRET_SAUCE="it\'s in /src, MIT licensed"', 'SECRET_RECIPE="flour, water, salt, time"', 'RESTRICTED_SECTION=none', 'CONFIDENTIAL_BUDGET=/annual-report.pdf', 'PRIVATE_THOUGHTS=/archive', 'PASSWORD_REQUIRED=false', 'MORE_SECRETS=https://example.com/meetings', 'ACCESS=public']) {
+    assert.deepEqual(credentialShapes(v), [], v);
+  }
+});
+
+// Samples are built at run time, so this repo holds no string a secret scanner would flag.
+test('credential shapes are found', () => {
+  const r = (n, set = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789abcdefghijkmnopqrstuvwxyz') => Array.from({ length: n }, (_, i) => set[(i * 7 + 3) % set.length]).join('');
+  const samples = [
+    ['AWS access key ID', `KEY=${'AK' + 'IA'}${r(16, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')}`],
+    ['GitHub token', `${'gh' + 'p_'}${r(36)}`],
+    ['Slack token', `${'xo' + 'xb'}-${r(12)}`],
+    ['Stripe key', `${'sk' + '_live_'}${r(24)}`],
+    ['Anthropic or OpenAI key', `${'sk' + '-ant-'}${r(30)}`],
+    ['private key block', `-----BEGIN ${'RSA PRI' + 'VATE'} KEY-----`],
+    ['URL with a username and password', 'DATABASE_URL=postgres://admin' + ':' + r(12) + '@db.example.com/app'],
+    ['random-looking value for API_TOKEN', `API_TOKEN=${r(32)}`],
+  ];
+  for (const [name, text] of samples) assert.ok(credentialShapes(text).includes(name), `${name}: ${credentialShapes(text).join(', ') || 'nothing found'}`);
+});
+
+test('withoutPath makes a page that echoes the path compare equal to the ordinary 404', () => {
+  const page = (p) => `<h1>Not found</h1><p>Nothing at ${p}</p>`;
+  assert.equal(withoutPath(page('/.env'), '/.env'), withoutPath(page('/no-such-page-x'), '/no-such-page-x'));
+  assert.equal(withoutPath(page('/@fs/../.env'), '/@fs/..%2f.env'), withoutPath(page('/a'), '/a'));
+});
+
+test('looksLikePrank spots an env-file body and leaves pages alone', () => {
+  assert.equal(looksLikePrank(codeBlocks.find((b) => b.includes('SECRET_MEETING_1'))), true);
+  assert.equal(looksLikePrank('<h1>Page not found</h1>'), false);
+  assert.equal(looksLikePrank('ACCESS=public'), false);
+});
+
+test('echoProblems reports what came back raw, and nothing for a cleaned echo', () => {
+  const long = 'z'.repeat(600);
+  assert.equal(echoProblems('Not found', 'spa1', long), null);
+  assert.deepEqual(echoProblems(`# You asked for /.env.spa1<b>${'z'.repeat(80)}`, 'spa1', long, 'text/plain'), []);
+  const raw = echoProblems(`You asked for /.env.spa1\r\n<b>${long}`, 'spa1', long, 'text/html');
+  assert.equal(raw.length, 3, raw.join('; '));
+});
+
+test('sitemapLocs reads pages and child sitemaps', () => {
+  assert.deepEqual(sitemapLocs('<urlset><url><loc>https://a.example/</loc></url><url><loc> https://a.example/x?a=1&amp;b=2 </loc></url></urlset>').pages, ['https://a.example/', 'https://a.example/x?a=1&b=2']);
+  assert.deepEqual(sitemapLocs('<sitemapindex><sitemap><loc>https://a.example/s1.xml</loc></sitemap></sitemapindex>'), { pages: [], sitemaps: ['https://a.example/s1.xml'] });
+});
+
+test('spread keeps the first and last items', () => {
+  assert.deepEqual(spread([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 4), [1, 4, 7, 10]);
+  assert.deepEqual(spread([1, 2], 4), [1, 2]);
+});
+
+test('baseMapper sends the site and its www twin to the base, and maps answers back', () => {
+  const { toBase, fromBase } = baseMapper('example.com', 'http://localhost:3000');
+  assert.equal(toBase('https://www.example.com/.env'), 'http://localhost:3000/.env');
+  assert.equal(toBase('https://other.example/x'), 'https://other.example/x');
+  assert.equal(fromBase('http://localhost:3000/about'), 'https://example.com/about');
+});
+
+test('compare reads a status page and a JSON report, and lists what changed', () => {
+  const page = 'Generated 2026-10-01 by x\n\n| ID | Check | Level | a.example | b.example |\n|---|---|---|---|---|\n| P1 | Probes | required | ✓ | ✗ |\n| C1 | Prank | recommended | ! | ✓ |';
+  const prev = parsePrevious(page, 'a.example');
+  assert.equal(prev.date, '2026-10-01');
+  const cmp = compareResults(prev.results, [{ id: 'P1', level: 'required', status: 'fail' }, { id: 'C1', level: 'recommended', status: 'pass' }, { id: 'X1', level: 'required', status: 'pass' }]);
+  assert.deepEqual(cmp.worse, ['P1 (pass to fail)']);
+  assert.deepEqual(cmp.better, ['C1 (warn to pass)']);
+  assert.deepEqual(cmp.newlyChecked, ['X1 (required, pass)']);
+  assert.match(formatComparison(cmp, '2026-10-01').join('\n'), /Worse: P1 \(pass to fail\)/);
+  const json = parsePrevious(JSON.stringify({ domain: 'a.example', checked_at: '2026-10-02T00:00:00Z', results: [{ id: 'P1', level: 'required', status: 'pass' }] }), 'a.example');
+  assert.equal(json.results.get('P1').status, 'pass');
+  assert.equal(parsePrevious(page, 'c.example'), null);
+});
+
+test('log lines parse in combined format and in each host\'s JSON', () => {
+  assert.deepEqual(parseLine('203.0.113.9 - - [23/Oct/2026:01:02:03 +0000] "GET /.env?x=1 HTTP/1.1" 404 12 "-" "curl/8.5.0"'), { addr: '203.0.113.9', method: 'GET', path: '/.env', status: 404, ua: 'curl/8.5.0' });
+  assert.equal(parseLine('{"ClientRequestPath":"/.git/config","ClientRequestUserAgent":"Go-http-client/1.1","ClientIP":"203.0.113.9","ClientRequestMethod":"GET","EdgeResponseStatus":404}').path, '/.git/config');
+  assert.equal(parseLine('{"proxy":{"path":"/wp-config.php","userAgent":["Mozilla/5.0"],"clientIp":"203.0.113.9","method":"GET","statusCode":404}}').path, '/wp-config.php');
+  assert.equal(parseLine('{"path":"https://example.com/.aws/credentials","httpStatus":404}').path, '/.aws/credentials');
+  assert.equal(parseLine('not a log line'), null);
+});
+
+test('client families: claimed crawlers, scripts, scanners', () => {
+  assert.equal(family('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'), 'Claims to be a search crawler');
+  assert.equal(family('curl/8.5.0'), 'Scripts');
+  assert.equal(family('Mozilla/5.0 zgrab/0.x'), 'Scanners that name themselves');
+  assert.equal(family('security-pranks-audit/1.0.0 (+https://github.com/geeks-accelerator/agent-security-pranks)'), 'This audit (security-pranks-audit)');
+  assert.equal(family(''), 'No user agent');
+});
+
+test('probeKind counts secret paths, framework endpoints and unused methods, nothing else', () => {
+  assert.equal(probeKind({ path: '/.env', method: 'GET' }), 'env files');
+  assert.equal(probeKind({ path: '/_next/image', method: 'GET' }), 'framework endpoint /_next/image');
+  assert.equal(probeKind({ path: '/', method: 'POST' }), 'POST requests');
+  assert.equal(probeKind({ path: '/about', method: 'GET' }), null);
+});
+
+test('the log tally counts probes and hits, never addresses', () => {
+  const t = logTally();
+  const line = (ip, m, p, s, ua) => `${ip} - - [23/Oct/2026:01:02:03 +0000] "${m} ${p} HTTP/1.1" ${s} 0 "-" "${ua}"`;
+  for (const l of [
+    line('203.0.113.1', 'GET', '/.env', 404, 'curl/8'), line('203.0.113.1', 'GET', '/.git/config', 404, 'curl/8'),
+    line('203.0.113.2', 'GET', '/.env', 200, 'Googlebot'), line('203.0.113.3', 'POST', '/', 500, 'python-requests/2'),
+    line('198.51.100.7', 'GET', '/about', 200, 'Mozilla/5.0'), line('198.51.100.7', 'GET', '/nope', 404, 'Mozilla/5.0'), 'garbage',
+  ]) t.add(l);
+  const r = t.result();
+  assert.equal(r.lines, 7);
+  assert.equal(r.parsed, 6);
+  assert.equal(r.probes, 4);
+  assert.equal(r.probe_addresses, 3);
+  assert.equal(r.not_found_share, 50);
+  assert.deepEqual(r.kinds.find((k) => k.kind === 'env files').statuses, { 404: 1, 200: 1 });
+  assert.deepEqual(r.succeeded_or_crashed.map((h) => h.request).sort(), ['200 GET /.env', '500 POST /']);
+  const text = formatLogs(r).join('\n');
+  assert.match(text, /Probes: 4 requests from 3 addresses/);
+  assert.doesNotMatch(text, /203\.0\.113|198\.51\.100/);
+});
+
+test('edgeBlock names a CDN block page, and nothing else', () => {
+  const res = (status, headers, text = '') => ({ status, headers: new Headers(headers), text });
+  assert.equal(edgeBlock(res(403, { server: 'cloudflare' }, '<title>Attention Required! | Cloudflare</title>')), 'Cloudflare');
+  assert.equal(edgeBlock(res(403, { 'cf-mitigated': 'challenge' })), 'Cloudflare');
+  assert.equal(edgeBlock(res(403, { 'x-vercel-mitigated': 'deny' })), 'Vercel firewall');
+  assert.equal(edgeBlock(res(404, { server: 'cloudflare' }, 'ACCESS=public\nPASSWORD_REQUIRED=false')), null);
+  assert.equal(edgeBlock(res(200, { 'cf-mitigated': 'challenge' })), null);
+});

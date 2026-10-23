@@ -1,0 +1,28 @@
+# Copy to .github/workflows/security-pranks.yml and list your domains in sites.txt, one per line.
+# Scores every site weekly and on demand, saves the status page as an artifact, and fails
+# when any site fails a required check.
+name: Agent security pranks
+
+on:
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - name: Score every site
+        run: npx --yes security-pranks-audit@1 --matrix $(cat sites.txt) > security-pranks-status.md
+      - name: Keep the status page
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-pranks-status
+          path: security-pranks-status.md
+      # To score one preview deployment before it ships, point --base at it:
+      #   npx --yes security-pranks-audit@1 example.com --base https://pr-42.example-preview.app

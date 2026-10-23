@@ -1,0 +1,8 @@
+# The package has no dependencies; the GitHub Actions are the versions that can drift unseen,
+# and the Release workflow publishes with id-token: write.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
