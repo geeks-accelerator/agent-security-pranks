@@ -8,7 +8,9 @@ Everything below is for that agent. The lessons at the end come from the sites t
 
 **Scope:** a website the owner runs and manages, where you can change how it answers. A parked or redirect-only domain has nothing to answer with: skip it. **Values:** the site welcomes every AI agent and crawler, verified or not. Nothing you add may block, challenge or slow a visitor for its user agent, its claimed name or its verified status (X3). Answer what a request asks for.
 
-1. **Score the live site:** `npx security-pranks-audit@1 <your-domain>`, on Node 26 or later. Its requests look like the scanners it checks for (that's the point), so run it only against the project's own site. Exit code 1 means a required check failed. Most sites start with H1 or H2 failing and no prank (C1); a site that answers a probe with a 200 or a 5xx (P1) fixes that first.
+1. **Score the live site:** `npx security-pranks-audit@1 <your-domain>`, on Node 22.23.4, 24.22.1 or 26.12.1, or later on the same line. Its requests look like the scanners it checks for (that's the point), so run it only against the project's own site.
+   - Exit code 0 means every required check passed, and 1 means at least one failed: read each failing line and its reason. Exit code 2 means it didn't score anything (an unsupported Node version, a bad flag or an unreadable file): fix what the message names and run it again, and don't record a score from it.
+   - If a probe gets a 200 or a 5xx (P1), fix that before anything else.
    - If the owner can export a day of request logs (from the host or CDN: combined log format, or JSON lines from Cloudflare, Vercel or Railway), run `npx security-pranks-audit@1 --logs <file>` too. Those are the before numbers (T2). It prints counts only; never paste addresses anywhere. Don't wait for logs to start.
 
 2. **Find where the guard goes.** It has to run before the framework and before any static file, on every path:
@@ -45,11 +47,11 @@ Everything below is for that agent. The lessons at the end come from the sites t
    - Generate the status page: `npx security-pranks-audit@1 --matrix <your-domain> > docs/security-pranks-status.md`. Keep it in the project's private repo when there is one. If the owner runs several sites, one page for all of them lives in whichever repo they use for operations: `--matrix <domain> <domain> ...`.
    - Add one rule to CLAUDE.md or AGENTS.md: after changing middleware, the proxy, routes, the 404 page or the prank, run the guard tests and score the build.
 
-8. **Verify and ship:** build and test, and score the local build before you deploy: `npx security-pranks-audit@1 <your-domain> --base http://localhost:<port>`. After the deploy, run `npx security-pranks-audit@1 <your-domain> --compare docs/security-pranks-status.md` against production to see what changed, regenerate the status page, and commit. Compare item by item, not just the totals: adding a prank makes P3, P4 and C2 apply.
+8. **Verify locally:** build and test, then score the local build: `npx security-pranks-audit@1 <your-domain> --base http://localhost:<port>`. On a local address it names your domain as the Host, so a server that runs several sites answers as the one being scored.
 
 9. **If the site is behind Cloudflare or another CDN (H4),** check that its bot settings match the site's welcome: Bot Fight Mode off, and the AI bot settings (Search, Agent, Training) set to Allow if the site welcomes them. Optionally propose the edge rule from [recipes.md](recipes.md) for probe families the prank doesn't answer, tested against the sitemap first.
 
-10. **Ask the owner before deploying,** and before changing CDN, firewall or DNS settings. Each is live for every visitor at once.
+10. **Ask the owner, then deploy.** Get the owner's OK before deploying, and before changing CDN, firewall or DNS settings: each is live for every visitor at once. After the deploy, run `npx security-pranks-audit@1 <your-domain> --compare docs/security-pranks-status.md` against production to see what changed, regenerate the status page, and commit. Compare item by item, not just the totals: adding a prank makes P3, P4 and C2 apply.
 
 11. **A day after the deploy,** if you have logs, run `--logs` on a day of them again. Scanner 5xx should be zero, every probe still a failure, and nothing readers use changed.
 

@@ -42,7 +42,7 @@ This repo holds:
 ## Why this one
 
 - **Welcoming by design.** The real AI crawlers don't probe: across one owner's sites, none of 448k probes came from a verified bot, and the biggest scanner wore twenty AI-crawler names as a disguise ([the research](docs/research/bots-in-ai-clothing.md)). So nothing here keys on names or verification (X3). It answers the request for `/.env`, whoever sends it.
-- **Built from logs.** On a network of eleven small sites, about 64% of requests were 404s, nearly all of them probes: 1,806 requests for secrets in 16 hours. Each item says what harm it prevents, and the claims cite RFCs and official docs with dates.
+- **Built from logs.** On a network of eleven small sites, about 64% of requests were 404s, nearly all of them probes: about 1,700 to 1,800 requests for secrets in 16 hours, depending on how they're counted (STANDARD.md §2). Each item says what harm it prevents, and the claims cite RFCs and official docs with dates.
 - **It checks that the joke can't backfire.** A prank served with a 200 puts your domain on shared target lists (P1). A fake key in it is a false alarm for a stranger to chase (P2). A prank that leaks into ordinary 404s confuses your readers (P8). The audit fails each of these.
 - **Hardening first, joke second.** Refusing unused methods (H1) and framework endpoints (H2) is what keeps the site safe. A prank is optional; a site with none can pass every required check.
 - **One tool for every kind of site.** Static guides, news sites, apps behind a login, sites with an API and forms. It detects the framework, the prank, an API's own error answers, a CDN's block page and an echoed path, and skips what doesn't apply with the reason. A redirect-only domain is reported as out of scope rather than scored. A site that's safe with no prank at all passes every required check.
@@ -61,7 +61,7 @@ This repo holds:
 
 ## Score a site
 
-It needs Node 26 or later, with current security releases, and has no dependencies. It sends about 20 requests, at most four at a time: eight probe paths, an echo test, a missing page, `GET` and `HEAD /`, an empty `POST` and `PUT /` that create nothing, the framework endpoint it detects, and up to 10 sitemap pages. It asks for gzip and decodes it itself; a body in an encoding it didn't ask for, such as Brotli, is reported rather than read. It prints a pass, warning or failure for each check, with the reason, and exits with code 1 when a required check fails, so it can gate a deploy.
+It needs Node 22.23.4, 24.22.1 or 26.12.1, or later on the same line (each supported line's current security release), and has no dependencies. It sends about 20 requests, at most four at a time: eight probe paths, an echo test, a missing page, `GET` and `HEAD /`, an empty `POST` and `PUT /` that create nothing, the framework endpoint it detects, and up to 10 sitemap pages. It asks for gzip and decodes it itself; a body in an encoding it didn't ask for, such as Brotli, is reported rather than read. It prints a pass, warning or failure for each check, with the reason, and exits with code 1 when a required check fails, so it can gate a deploy.
 
 **Run it only against sites you run.** Its requests look like the scanners it checks for, in your logs and to a firewall. It names itself in its user agent (`security-pranks-audit/<version> (+repo URL)`) so you can tell its requests apart.
 

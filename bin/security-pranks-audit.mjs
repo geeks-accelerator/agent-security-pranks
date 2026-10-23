@@ -15,14 +15,25 @@ import { parsePrevious, compareResults, formatComparison, mapLimit } from '../sr
 import { logTally, formatLogs } from '../src/logs.mjs';
 
 // engines in package.json only warns, so say it plainly before anything fails oddly.
-const NODE_MIN = '26.12.1';
+// Each supported Node line at its current security release (the 2026-10-21 release fixed a
+// Brotli decoder bug and TLS hostname bypasses in all three). TLS checks and the decoders are
+// Node's, so the line matters less than being on its latest security release. End-of-life
+// and odd-numbered lines get no security releases and are refused.
+const NODE_LINES = { 22: '22.23.4', 24: '24.22.1', 26: '26.12.1' };
 const atLeast = (version, min) => {
   const [a, b] = [version, min].map((v) => v.split('.').map(Number));
   const i = a.findIndex((n, j) => n !== b[j]);
   return i < 0 || a[i] > b[i];
 };
-if (!atLeast(process.versions.node, NODE_MIN)) {
-  console.error(`security-pranks-audit needs Node ${NODE_MIN} or later, with current security releases (this is ${process.versions.node}).`);
+const nodeOk = (version) => {
+  const major = Number(version.split('.')[0]);
+  const newest = Math.max(...Object.keys(NODE_LINES).map(Number));
+  if (major > newest) return major % 2 === 0; // an even line newer than this release knows of; odd lines get no long-term support
+  return NODE_LINES[major] !== undefined && atLeast(version, NODE_LINES[major]);
+};
+if (!nodeOk(process.versions.node)) {
+  const lines = Object.values(NODE_LINES).join(', ');
+  console.error(`security-pranks-audit needs a supported Node line at its current security release (${lines}, or later on the same line); this is ${process.versions.node}.`);
   process.exit(2);
 }
 
