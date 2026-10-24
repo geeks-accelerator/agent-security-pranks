@@ -4,9 +4,11 @@
 [![npm](https://img.shields.io/npm/v/security-pranks-audit)](https://www.npmjs.com/package/security-pranks-audit)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**Most of the traffic to a small website is robots hunting for leaked secrets.** `/.env`, `/.git/config`, SSH keys, `/.aws/credentials`, `wp-config.php`, over and over. This project turns those requests into the safest, and friendliest, answers your site gives: refuse what it never needs, and reply to the hunt with a harmless joke in your own voice, instead of a crash, a leak or a trap.
+**Turn the bots hunting your site for secrets into its safest answers.** On many small websites, most requests are bots asking for `/.env`, `/.git/config`, SSH keys or `wp-config.php`. This project is a standard ([STANDARD.md](STANDARD.md)) and a zero-dependency audit that checks how your live site answers: a clean 4xx, nothing shaped like a credential, and, if you want, a harmless joke in your own voice with a note for the AI agents that read it. No account, no API key, no traps.
 
-It's a standard ([STANDARD.md](STANDARD.md)) and a zero-dependency audit that probes your live site the way scanners do and checks every answer. No account, no API key. As far as [our survey](docs/research/who-else-talks-to-scanners.md) could find, nothing else does this: plenty of sites block scanners, a few trap them, and a few hobby projects answer with poems or fake keys, but none answer the hunt safely, kindly, and with a way to measure it.
+Blocking treats every probe the same, and catches agents you want along the way. Honeypots answer with a 200 and fake keys, which puts your domain on scanners' lists of sites where they found something. This answers the request safely, measures what happens, and can leave a note for the agents that read the body. As far as [our survey](docs/research/who-else-talks-to-scanners.md) could find, nothing else combines those.
+
+## Quick start
 
 ```
 npx security-pranks-audit example.com
@@ -144,6 +146,10 @@ To switch a project over, give its coding agent one line:
 > Adopt the Agent Security Pranks Standard in this repo by following https://github.com/geeks-accelerator/agent-security-pranks/blob/main/docs/adopting.md
 
 The agent reads the page when it runs: to have it follow the text you reviewed, put the latest release tag in place of `main` (`blob/v<version>/docs/adopting.md`, from the releases page). [docs/adopting.md](docs/adopting.md) has the step-by-step instructions, with lessons from the first sites that did it.
+
+## Next step
+
+Run the audit on a site you run: `npx security-pranks-audit@1 <your-domain>`. Then give your coding agent the [adopting guide](docs/adopting.md), or copy code and guard tests from the [recipes](docs/recipes.md).
 
 ## Contributing
 
