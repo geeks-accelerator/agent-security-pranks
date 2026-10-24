@@ -327,7 +327,7 @@ MORE_SECRETS=https://example.com/hours
 
 **One reply per kind of probe.** Scanners hunt more than `.env` (§2). Each family can get its own reply in the same voice: the env file for `.env`, a "heap dump" that's a census of what the site really holds for `/actuator` and heap dumps, a line for `/wp-admin` and `*.php` on a site that runs neither, a pointer to the public repo for `.git`. Keep each one small, and every one follows the rules above.
 
-**Count what it does.** Put a tagged link in each reply: a query parameter your analytics already reads, with a value of your choosing, one per family if you want them apart (for example `?[parameter]=[your-tag]`). Pass the same tags to `--logs --tag`, and it counts the requests that arrive through them, so you learn whether anyone ever followed one. The scorecard accepts any parameter and value.
+**Count what it does.** Put a tagged link in each reply: a query parameter your analytics already reads, with a value of your choosing, one per family if you want them apart (for example `?[parameter]=[your-tag]`). Pass the same tags to `--logs --tag`, and it counts the requests that arrive through them, so you learn whether anyone ever followed one. The scorecard accepts any parameter and value. Expect a trickle from scanners: most read the status code and never the body. The larger audience is people, such as an operator reading a scan report ([who else talks to scanners](docs/research/who-else-talks-to-scanners.md)).
 
 **Done when:** probe paths get the prank. **Scorecard:** a probe answer counts as a prank when it's a 4xx that differs from the site's ordinary 404 page, or that's shaped like an env file. On a 404 page that differs on every request (a request ID, a nonce), the scorecard asks for two missing pages and takes the words they share as the page's fixed part: an answer with another status or content type, or without every one of those words, is a prank. Two answers don't count, and the prank rules don't grade them: a CDN or firewall block page (Cloudflare, Vercel, AWS, Akamai), because the request never reached the site, and an API's own error (JSON, or a 401, 403, 405 or 429), because that's the API answering. Both are still safe failures for P1. The check warns when no probe that reached the site gets a prank, or only some do, and says how many different replies it saw and whether they carry a tagged link.
 
@@ -336,6 +336,8 @@ MORE_SECRETS=https://example.com/hours
 **Level:** recommended. **Why:** some scanners are now driven by language models that read the answer. A short comment addressed to them costs nothing and reaches whoever reviews their logs.
 
 **Invite the operator; never instruct the agent.** The note suggests something the agent can pass on to whoever runs it, with a link. It doesn't tell the agent to send a request, run a command, register an account or ignore its instructions. Why: an order in a response works only on an agent that obeys instructions it finds in content, against its operator's task. That's a prompt injection, however friendly. Well-built agents ignore it, and on the badly built ones the site has made something happen that nobody asked for, in its own name.
+
+**Link to a page that describes, not an endpoint that acts.** Point the invitation at something the operator can read. Why: if following the link does something (registers, attends, subscribes), link previewers and crawlers trigger it by accident, and an agent that follows it mid-scan acts against its operator's task. Write it as a plain link, not as a request (`GET /api/...`): a method in front of a path addresses the agent as a program.
 
 **Give real researchers the door.** End the note with a link to your `security.txt` (RFC 9116). Why: the joke is for scanners, but not everyone who lands on `/.env` is one. A security researcher who finds a real problem, or an operator whose agent turned up something odd, needs a way to report it, and a prank that only jokes leaves a real report with nowhere to go. The file needs at least one `Contact` and an `Expires` date that hasn't passed; [docs/recipes.md](docs/recipes.md) has one.
 
@@ -356,15 +358,18 @@ X-[Your-Header-Name]: [one line in your voice: what the site offers instead of s
 
 The same rules apply: it invites, never orders. Keep it one line of plain ASCII, short (a header value is not a page), under a name of your own that starts with `X-` (never a standard header's name). The scorecard reads any `X-` header that addresses agents. Send it on the prank's answers only: on real pages, a note about grunt work would be talking to the agents you welcome.
 
-**Done when:** the prank has a line addressed to AI agents, it invites rather than instructs, and it links a working `security.txt`. **Scorecard:** looks for the line in the prank's body, or in an `X-` header on its answers. Warns when either gives orders: a request to send (`POST https://...`), a command to run (`curl https://...`), or an override of the agent's instructions. When the prank mentions `security.txt`, it fetches `/.well-known/security.txt` and warns unless it's `text/plain` with a `Contact` and an unexpired `Expires`. When the prank doesn't mention it, the pass line suggests adding the link.
+**Done when:** the prank has a line addressed to AI agents, it invites rather than instructs, and it links a working `security.txt`. **Scorecard:** looks for the line in the prank's body, or in an `X-` header on its answers. Warns when either gives orders: a request to send (a method in front of a URL or path, such as `POST https://...` or `GET /api/...`), a command to run (`curl https://...`), or an override of the agent's instructions. When the prank mentions `security.txt`, it fetches `/.well-known/security.txt` and warns unless it's `text/plain` with a `Contact` and an unexpired `Expires`. When the prank doesn't mention it, the pass line suggests adding the link.
 
-### C3. A line for people on the 404 page
+### C3. A way back on the 404 page, for people and agents
 
-**Level:** recommended. **Why:** people see the 404 page, not the prank. A line in the product's voice that points somewhere useful turns a dead end into a link.
+**Level:** recommended. **Why:** people and welcome agents see the ordinary 404 page, not the prank, when a link moved, was mistyped, or was invented by a chatbot. A page that points them somewhere useful turns a dead end into a way back.
 
-For example: "Looking for a secret meeting? This guide doesn't have any. Every meeting in it is open to the public, and you're invited."
+- **For people:** a line in the product's voice and a link. For example: "Looking for a secret meeting? This guide doesn't have any. Every meeting in it is open to the public, and you're invited."
+- **For agents:** a pointer they can follow, such as suggested pages, a `Link` header to the right one, or a pointer to `llms.txt` or the docs. Coding assistants and AI search hit real misses too, and a pointer keeps them from guessing. The [Agent and Search Readiness Standard](https://github.com/geeks-accelerator/agent-and-search-readiness) covers `llms.txt` in depth.
 
-**Done when:** the 404 page has the line and a link. **Checked in review.**
+This is the ordinary 404, kept apart from the prank (P8): help for welcome visitors on real misses, while probe paths get the joke. Keep its status a 404.
+
+**Done when:** the 404 page has a line and a link for people, and a pointer agents can follow. **Checked in review.**
 
 ### C4. A public page of misses
 
@@ -474,7 +479,7 @@ Level: **R** required where it applies, **Rec** recommended. Why: **reputation**
 | X3 | Never block or challenge by user agent, crawler name, verified status or network | R | readers | review |
 | C1 | The "only secret": a prank on probe paths, one reply per family, with tagged links | Rec | voice | score |
 | C2 | A note for AI agents that invites the operator, never instructs the agent, and links a working security.txt | Rec | voice, safety | score, review |
-| C3 | A line for people on the 404 page, pointing somewhere useful | Rec | readers | review |
+| C3 | A way back on the 404 page: a line and a link for people, a pointer for agents | Rec | readers | review |
 | C4 | A public page of misses: paths and counts only, cleaned, from the logs | Rec | readers, safety | review |
 | T1 | Checks run against the built server, each seen failing once | R | quality | review |
 | T2 | Logs read before and after, prank links counted | Rec | quality | logs |

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.6 (2026-10-24)
+
+From the research note [who else talks to scanners](docs/research/who-else-talks-to-scanners.md). No required check changes.
+
+- **C2 warns on "GET /path" written as an order,** as it did for `POST`, `PUT`, `PATCH`, `DELETE` and `curl`: a method in front of a URL or path addresses the agent as a program ("the door is open: GET /api/attend"). A plain link stays an invitation. Upper case only, as HTTP writes it.
+- **C2: link to a page that describes, not an endpoint that acts.** If following the invitation does something (registers, attends, subscribes), link previewers and crawlers trigger it by accident, and an agent mid-scan acts against its operator's task.
+- **C3 is "a way back on the 404 page, for people and agents":** a line and a link for people, and a pointer agents can follow (suggestions, a `Link` header, `llms.txt`), as projects like agent-404 do for real misses. Kept apart from the prank (P8).
+- **C1** sets expectations: a trickle of follow-through from scanners, and a larger audience of people reading scan reports.
+
 ## 1.2.5 (2026-10-24)
 
 From animalhouse.ai, whose H2 warning didn't apply. Fewer false warnings; no check newly fails.
