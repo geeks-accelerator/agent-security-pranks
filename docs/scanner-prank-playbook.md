@@ -25,7 +25,7 @@ A prank is a garnish. The useful part is refusing what your site never needs, so
 
 - **Refuse methods you do not use (H1).** A read-only site answers anything but `GET` and `HEAD` with `405` and `Allow: GET, HEAD`. On our sites this turned framework 500s with stack traces in the log into clean refusals.
 - **Refuse framework endpoints you do not use (H2).** Next.js serves its image optimizer at `/_next/image` even if no page uses it, and that endpoint carried a critical remote-code-execution advisory in 2026. Return `404` for it.
-- **Pin your runtime and patch it (H3).** If nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release: on 2026-10-22, a project pinned to `>=24.22.1 <25` got Node 24.21.0. Railway's builder (Railpack 0.43) resolved the range to a version outside it, the day after 24.22.1 shipped, and the build didn't fail.
+- **Pin your runtime and patch it (H3).** The version your host runs may not be the one you expect. On 2026-10-22, the day after Node 24.22.1 shipped with security fixes, the playbook's sites pinned nothing, and Railway's builder (Railpack 0.43) chose its own default, Node 24.21.0. The same day, another project pinned to `>=24.22.1 <25` also got 24.21.0: the builder resolved the range to a version outside it, and the build didn't fail.
 
 ## The ground rules
 

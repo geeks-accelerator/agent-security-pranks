@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+`--logs` found every scanner 5xx it was built to find again. No audit check changes.
+
+- **A redirect no longer means a site serves a method.** Since 1.1.6, a method and path that got a 2xx or a 3xx anywhere in the log counted as served, and its requests weren't probes. On a real Railway log, a scanner's fake Server Action POSTs to `/`, `/api` and `/app` each got a 307 as well as a 500, so all three paths counted as served: the report showed "5xx 4" in its totals, then "Every probe got something other than a 2xx or a 5xx", and exited 0. Only a 2xx or a 303 (a form that POSTs and redirects) counts as served now.
+- **A 5xx always counts.** Since 1.2.3, a probe in a family a site may really serve (`.php`, backups, a framework endpoint its pages use) was left out of the exit code whatever its status, so a scanner asking `/_next/image` for a remote SVG and getting a 500, the pattern behind GHSA-2464-fhr4-w9xw, exited 0. The exemption now covers a 2xx only.
+- Two tests, each failing on 1.2.3: the scanner's POSTs from that log, and a 5xx on the image optimizer, a `.php` path and a backup file.
+- **STANDARD.md H3** cites both incidents of 2026-10-22: the playbook's sites pinned nothing and Railpack chose its default, Node 24.21.0, and another project's range (`>=24.22.1 <25`) resolved to the same version outside it. 1.2.2 gave only the second, under a reason ("if nothing pins your Node version") that described the first. The playbook says the same. T2 and the README say a 5xx always counts.
+
 ## 1.2.3 (2026-10-24)
 
 From animalhouse.ai running 1.2.2's `--logs` as a CI gate. Fewer false failures; no check newly fails.
