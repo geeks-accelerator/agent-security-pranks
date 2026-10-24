@@ -369,4 +369,7 @@ test('--logs fails a CI step only for probes that got a 2xx or a 5xx outside fam
   assert.equal(logsFail(tally([line('GET', '/.env', 200)])), true);
   assert.equal(logsFail(tally([line('PUT', '/', 500)])), true);
   assert.equal(logsFail(tally([line('GET', '/index.php', 200)])), false, 'a PHP site serves .php: may be real traffic');
+  const image = tally([line('GET', '/_next/image', 200)]);
+  assert.equal(logsFail(image), false, 'a Next.js site whose pages use next/image serves /_next/image');
+  assert.equal(image.succeeded_or_crashed[0].may_include_real_traffic, true);
 });
