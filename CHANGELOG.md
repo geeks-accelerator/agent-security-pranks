@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.8 (2026-10-24)
+
+From five AI models' reviews ([docs/reviews.md](docs/reviews.md)). No checks change.
+
+- **H2 cites the advisories:** seven for Next.js's image optimizer in 2026, two of them critical remote code execution (GHSA-2xp9-vwfh-vxw4, GHSA-2464-fhr4-w9xw), in STANDARD.md and the playbook. H2 applies to any framework with an always-on endpoint; the scorecard knows Next.js, and on another framework H2 is a review item.
+- **C2 says its order detector is a heuristic:** it warns rather than fails, and can miss an order phrased another way, so the note is also for review.
+- **The README** calls the prank checks guardrails rather than a promise, says why the Node versions are exact, and links the reviews. The error on an older Node says how to update.
+
 ## 1.2.7 (2026-10-24)
 
 The README, rewritten from the research, so the npm page shows it. No checks change.

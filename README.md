@@ -52,7 +52,7 @@ Score on 2026-10-24: required 10 of 10, recommended 2 of 2
 ## What's new here
 
 - **Hardening first.** Refuse the methods your site never uses (H1) and framework endpoints nobody calls (H2), so the next vulnerability in that code path can't reach you. On the playbook's sites, that alone turned scanner-triggered 500s with stack traces into clean refusals. A site with no prank at all can pass every required check.
-- **A joke that can't backfire.** If you add one, the audit checks it can't hurt you or anyone else: a 4xx, never a 200 (P1); nothing shaped like a credential, even fake ones (P2); not indexed, not cached for long (P3); plain text (P4); never on a real page or an ordinary 404 (P6, P8); no zip bombs, tarpits or redirects at third parties (X1).
+- **Guardrails on the joke.** If you add one, the audit checks the ways it most often hurts you or someone else: a 4xx, never a 200 (P1); nothing shaped like a credential, even fake ones (P2); not indexed, not cached for long (P3); plain text (P4); never on a real page or an ordinary 404 (P6, P8); no zip bombs, tarpits or redirects at third parties (X1). It reads the probes it sends and a sample of your pages, so it catches common mistakes, not every one: the [guard tests](docs/recipes.md#guard-tests-t1) cover your routes (T1).
 - **An invitation, not an injection.** Some scanners are language models that read the reply, so the prank can carry a note for them, in the body or a header. The note invites the operator, with a link to something real, and never orders the agent (C2). The audit warns on anything that reads like a command, from `POST https://...` to "GET /api/...".
 - **A door for real researchers.** The note links your `security.txt`, so someone who finds a real problem has a way to report it, and the audit checks the file works.
 - **Measured, not assumed.** `--logs` counts probes in an access log, or in Cloudflare's analytics on the Free plan, before and after you ship, and exits 1 when a probe got a 2xx or a crash, so it can gate CI. Tag the prank's links and it counts who followed them.
@@ -69,7 +69,7 @@ The research behind it:
 - **[Who else talks to scanners](docs/research/who-else-talks-to-scanners.md):** what other sites and projects do with these requests, from poems and honeypots to header messages and agent-recovery 404s, and how this standard differs.
 - **[STANDARD.md §2](STANDARD.md#2-what-the-traffic-says):** every dataset, with dates, including an app with an API (animalhouse.ai) and an agent platform on Cloudflare's Free plan (drifts.bot).
 
-How it reads to different kinds of readers, from a security reviewer to the agent that requested `/.env`: [perspectives](docs/perspectives.md).
+How it reads to different kinds of readers, from a security reviewer to the agent that requested `/.env`: [perspectives](docs/perspectives.md). What five AI models said when we asked for an honest review, and what we changed: [reviews](docs/reviews.md).
 
 ## How it fits with other tools
 
@@ -86,7 +86,7 @@ This repo holds the [standard](STANDARD.md), the `security-pranks-audit` scoreca
 
 ## Score a site
 
-It needs Node 22.23.4, 24.22.1 or 26.12.1, or later on the same line (each supported line's current security release), and has no dependencies. It sends about 20 requests, plus the sitemap and up to 10 of its pages (and, when H2 would warn, up to 10 pages the homepage links to), at most four at a time: eight probe paths, an echo test, two missing pages, `GET` and `HEAD /`, an empty `POST` and `PUT /` that create nothing, the framework endpoint it detects, and the sitemap pages. It asks for gzip or deflate and decodes it itself; a body in an encoding it didn't ask for, such as Brotli, is reported rather than read. It prints a pass, warning or failure for each check, with the reason, and exits with code 1 when a required check fails, so it can gate a deploy.
+It needs Node 22.23.4, 24.22.1 or 26.12.1, or later on the same line (each supported line's current security release), and has no dependencies. Why so exact: it reads answers from sites it doesn't control, and the 2026-10-21 releases fixed a Brotli decoder bug and TLS hostname checks in all three lines. On an older Node it says so and stops; `nvm install 24`, or `node-version: 24` in CI, fixes it. It sends about 20 requests, plus the sitemap and up to 10 of its pages (and, when H2 would warn, up to 10 pages the homepage links to), at most four at a time: eight probe paths, an echo test, two missing pages, `GET` and `HEAD /`, an empty `POST` and `PUT /` that create nothing, the framework endpoint it detects, and the sitemap pages. It asks for gzip or deflate and decodes it itself; a body in an encoding it didn't ask for, such as Brotli, is reported rather than read. It prints a pass, warning or failure for each check, with the reason, and exits with code 1 when a required check fails, so it can gate a deploy.
 
 **Run it only against sites you run.** Its requests look like the scanners it checks for, in your logs and to a firewall. It names itself in its user agent (`security-pranks-audit/<version> (+repo URL)`) so you can tell its requests apart.
 
@@ -135,9 +135,9 @@ It checks, from outside:
 - an echoed path comes back cleaned (P5);
 - sitemap pages and an ordinary missing page never get the prank (P6, P8);
 - unused methods are refused (a 405 with `Allow`, or another 4xx on a site with forms or an API), never a 5xx, and reads still work (H1);
-- Next.js's `/_next/image` answers 404 when no page uses it (H2);
+- Next.js's `/_next/image` answers 404 when no page uses it (H2; Next.js is the only framework the audit knows so far, so on another framework, H2 is yours to review);
 - every answer is small, prompt and stays on the site: no zip bombs, tarpits or redirects to someone else (X1);
-- whether there's a prank at all, how many different replies and tagged links it has, and whether its note for AI agents invites the operator rather than giving the agent orders (C1, C2).
+- whether there's a prank at all, how many different replies and tagged links it has, and whether its note for AI agents invites the operator rather than giving the agent orders (C1, C2; the order detector is a heuristic, so it warns rather than fails, and the note is yours to read).
 
 It can't see your routes beyond the sitemap, whether the facts in your prank are right, your runtime version, or whether your tests have ever failed. The standard marks those "test" or "review", and [docs/recipes.md](docs/recipes.md) has guard tests for them. A high score is not the goal: a site that never leaks, never crashes on a probe and never shows the joke to a reader is.
 

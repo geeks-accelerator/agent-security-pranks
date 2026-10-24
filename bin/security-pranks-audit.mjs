@@ -34,7 +34,7 @@ const nodeOk = (version) => {
 };
 if (!nodeOk(process.versions.node)) {
   const lines = Object.values(NODE_LINES).join(', ');
-  console.error(`security-pranks-audit needs a supported Node line at its current security release (${lines}, or later on the same line); this is ${process.versions.node}.`);
+  console.error(`security-pranks-audit needs a supported Node line at its current security release (${lines}, or later on the same line); this is ${process.versions.node}. Update with your version manager (nvm install 24) or set node-version: 24 in CI.`);
   process.exit(2);
 }
 

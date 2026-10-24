@@ -24,7 +24,7 @@ The shopping list is always the same: `/.env` in every variation, `/.git/config`
 A prank is a garnish. The useful part is refusing what your site never needs, so the next vulnerability in that code path cannot reach you whatever it turns out to be.
 
 - **Refuse methods you do not use (H1).** A read-only site answers anything but `GET` and `HEAD` with `405` and `Allow: GET, HEAD`. On our sites this turned framework 500s with stack traces in the log into clean refusals.
-- **Refuse framework endpoints you do not use (H2).** Next.js serves its image optimizer at `/_next/image` even if no page uses it, and that endpoint carried a critical remote-code-execution advisory in 2026. Return `404` for it.
+- **Refuse framework endpoints you do not use (H2).** Next.js serves its image optimizer at `/_next/image` even if no page uses it, and that endpoint carried two critical remote-code-execution advisories in 2026 ([GHSA-2xp9-vwfh-vxw4](https://github.com/vercel/next.js/security/advisories/GHSA-2xp9-vwfh-vxw4), [GHSA-2464-fhr4-w9xw](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw)). Return `404` for it.
 - **Pin your runtime and patch it (H3).** The version your host runs may not be the one you expect. On 2026-10-22, the day after Node 24.22.1 shipped with security fixes, the playbook's sites pinned nothing, and Railway's builder (Railpack 0.43) chose its own default, Node 24.21.0. The same day, another project pinned to `>=24.22.1 <25` also got 24.21.0: the builder resolved the range to a version outside it, and the build didn't fail.
 
 ## The ground rules
