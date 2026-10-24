@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 (2026-10-24)
 
 From adopting the standard on drifts.bot (Next.js on Railway, behind Cloudflare's Free plan, an API and an MCP server): its proposals from PR #5, rebuilt on 1.1.6. A new input format, so a minor version.
 
