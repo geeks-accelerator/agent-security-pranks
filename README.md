@@ -69,6 +69,8 @@ The research behind it:
 - **[Who else talks to scanners](docs/research/who-else-talks-to-scanners.md):** what other sites and projects do with these requests, from poems and honeypots to header messages and agent-recovery 404s, and how this standard differs.
 - **[STANDARD.md §2](STANDARD.md#2-what-the-traffic-says):** every dataset, with dates, including an app with an API (animalhouse.ai) and an agent platform on Cloudflare's Free plan (drifts.bot).
 
+How it reads to different kinds of readers, from a security reviewer to the agent that requested `/.env`: [perspectives](docs/perspectives.md).
+
 ## How it fits with other tools
 
 | Tool | What it does | Use it with this |
