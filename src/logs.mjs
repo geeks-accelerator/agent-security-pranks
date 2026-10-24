@@ -127,8 +127,10 @@ export function probeKind(r) {
   return null;
 }
 
-// Families a site might really serve (PHP pages, zip downloads): their counts can include real traffic.
-const MAYBE_REAL = new Set(OTHER_PROBE_FAMILIES.map(([name]) => name).filter((n) => /PHP|backups/.test(n)));
+// Families a site might really serve (PHP pages, zip downloads, a framework endpoint its own pages use,
+// such as /_next/image on a Next.js site with next/image): their counts can include real traffic.
+const MAYBE_REAL_FAMILIES = new Set(OTHER_PROBE_FAMILIES.map(([name]) => name).filter((n) => /PHP|backups/.test(n)));
+const maybeReal = (kind) => MAYBE_REAL_FAMILIES.has(kind) || kind.startsWith('framework endpoint ');
 
 const decodeQuery = (q) => { try { return decodeURIComponent(q ?? ''); } catch { return q ?? ''; } };
 const statusClass = (s) => (s ? `${String(s)[0]}xx` : 'unknown');
@@ -173,7 +175,7 @@ export function logTally({ tags: wanted = [] } = {}) {
     add(k.families, r.ua === null ? 'User agent not in the data' : family(ua), n);
     if ((r.status >= 200 && r.status < 300) || r.status >= 500) {
       const key = `${r.status} ${r.method} ${r.path.slice(0, 80)}`;
-      if (!hits.has(key)) hits.set(key, { count: 0, kind, maybeReal: MAYBE_REAL.has(kind) });
+      if (!hits.has(key)) hits.set(key, { count: 0, kind, maybeReal: maybeReal(kind) });
       hits.get(key).count += n;
     }
   };
@@ -253,7 +255,7 @@ export function logTally({ tags: wanted = [] } = {}) {
         probe_addresses: probeAddrs.size,
         busiest_address: busiest ? { requests: busiest.requests, share: share(busiest.requests, parsed), probes_or_misses: share(busiest.probes + busiest.misses, busiest.requests), paths: busiest.paths.size, no_user_agent: busiest.noUa === busiest.requests } : null,
         scanner_addresses: { count: scanners.length, requests: scanners.reduce((n, a) => n + a.requests, 0) },
-        kinds: [...kinds].map(([kind, k]) => ({ kind, requests: k.requests, may_include_real_traffic: MAYBE_REAL.has(kind), statuses: sorted(k.statuses), families: sorted(k.families) })).sort((a, b) => b.requests - a.requests),
+        kinds: [...kinds].map(([kind, k]) => ({ kind, requests: k.requests, may_include_real_traffic: maybeReal(kind), statuses: sorted(k.statuses), families: sorted(k.families) })).sort((a, b) => b.requests - a.requests),
         succeeded_or_crashed: [...hits].map(([key, h]) => ({ request: key, count: h.count, kind: h.kind, may_include_real_traffic: h.maybeReal })).sort((a, b) => b.count - a.count),
         edge_redirects: edgeRedirects,
         query_not_in_data: queryUnknown > 0 && queryUnknown === parsed,

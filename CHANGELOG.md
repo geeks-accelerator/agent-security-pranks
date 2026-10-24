@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.3 (2026-10-24)
+
+From animalhouse.ai running 1.2.2's `--logs` as a CI gate. Fewer false failures; no check newly fails.
+
+- **A framework endpoint the site's pages use no longer fails `--logs`.** Since 1.2.1, `--logs` exits 1 when a probe got a 2xx or a 5xx, outside families a site may really serve. `/_next/image` wasn't one of those, so a Next.js site whose pages use `next/image` exited 1 on its own image requests: on animalhouse's day of logs, one `200 GET /_next/image` from a page that uses it failed the step. Framework endpoints now count as possibly real traffic, like `.php` and backups: still listed, marked "may be real traffic", and left out of the exit code. H2 already says a site that uses the endpoint keeps it.
+- **STANDARD.md T2** names the exception the README already described, and the README's `--logs` row gets its missing period.
+
 ## 1.2.2 (2026-10-24)
 
 Docs only, from animalhouse.ai reviewing 1.2.0. No check changes.
