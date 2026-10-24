@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+From adopting the standard on drifts.bot (Next.js on Railway, behind Cloudflare's Free plan, an API and an MCP server): its proposals from PR #5, rebuilt on 1.1.6. A new input format, so a minor version.
+
+- **`--logs` reads a saved Cloudflare GraphQL Analytics answer** (`httpRequestsAdaptiveGroups`): rows of `count` and `dimensions`, each weighted by its count, found wherever they sit, so one response, several zones, or several windows joined with `jq -s` all work. A dimension the query left out is reported as missing, not empty, and the report says the counts are sampled and capped at the top rows. An answer with errors and no rows exits 2 with the errors instead of reporting zero probes. It works with `--tag` and with 1.1.6's method handling. Recipe in `docs/recipes.md`, with the limits and Cloudflare's docs in §12.
+- **P6: where users choose URLs, exempt those prefixes up front.** The route test proves only that today's slugs pass; the next user's `env-setup` or `notes.php` would get the joke on their own page. Guidance in P6, the recipes and the adopting steps.
+- **X3 covers network (ASN) rules too:** no rule added for this standard keys on a network, since a path rule stops probes for everyone and a network rule challenges every agent on it. A network rule a site keeps for unrelated reasons is outside the standard, kept off the API, MCP and discovery paths (§9, recipes, adopting step 9).
+- **STANDARD.md §2:** drifts.bot's week of analytics (about 36,000 requests, about 6,000 probes, none got a 2xx), with its limits.
+
 ## 1.1.6 (2026-10-23)
 
 From adopting the standard at animalhouse.ai, an app with an API and an MCP endpoint. No check newly fails or warns.

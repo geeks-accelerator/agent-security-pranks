@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, agentHeaders, taggedLinks, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
 import { looksLikePrank } from '../src/audit.mjs';
-import { parseLine, family, probeKind, logTally, formatLogs } from '../src/logs.mjs';
+import { parseLine, family, probeKind, logTally, formatLogs, analyticsGroups, parseGroup } from '../src/logs.mjs';
 
 const playbook = readFileSync(new URL('../docs/scanner-prank-playbook.md', import.meta.url), 'utf8');
 const codeBlocks = [...playbook.matchAll(/```\n([\s\S]*?)```/g)].map((m) => m[1]);
@@ -281,4 +281,62 @@ test('edgeBlock names a CDN block page, and nothing else', () => {
   assert.equal(edgeBlock(res(403, { 'x-vercel-mitigated': 'deny' })), 'Vercel firewall');
   assert.equal(edgeBlock(res(404, { server: 'cloudflare' }, 'ACCESS=public\nPASSWORD_REQUIRED=false')), null);
   assert.equal(edgeBlock(res(200, { 'cf-mitigated': 'challenge' })), null);
+});
+
+const graphqlResponse = (zones) => ({ data: { viewer: { zones: zones.map((rows) => ({ httpRequestsAdaptiveGroups: rows.map(([count, path, status, method = 'GET', extra = {}]) => ({ count, dimensions: { clientRequestPath: path, clientRequestHTTPMethodName: method, edgeResponseStatus: status, ...extra } })) })) } }, errors: null });
+
+test('analytics rows are found in a GraphQL response, an array of responses, or a bare array', () => {
+  const one = graphqlResponse([[[120, '/.env', 404], [7, '/about', 200]], [[3, '/.git/config', 404]]]);
+  assert.equal(analyticsGroups(JSON.stringify(one, null, 2)).rows.length, 3);
+  assert.equal(analyticsGroups(JSON.stringify([one, one])).rows.length, 6);
+  assert.equal(analyticsGroups(JSON.stringify(one.data.viewer.zones[0].httpRequestsAdaptiveGroups)).rows.length, 2);
+  assert.deepEqual(analyticsGroups(JSON.stringify({ data: null, errors: [{ message: 'zone does not have access to the path' }] })), { rows: [], errors: ['zone does not have access to the path'] });
+  // A JSON-lines access log, or anything else, is not an analytics response: --logs reads it line by line.
+  assert.equal(analyticsGroups('{"ClientRequestPath":"/.env","EdgeResponseStatus":404}'), null);
+  assert.equal(analyticsGroups('{"ClientRequestPath":"/.env"}\n{"ClientRequestPath":"/.git/config"}'), null);
+  assert.equal(analyticsGroups('203.0.113.9 - - [23/Oct/2026:01:02:03 +0000] "GET /.env HTTP/1.1" 404 12'), null);
+});
+
+test('an analytics row stands for its count, and a dimension the query left out is unknown, not empty', () => {
+  assert.deepEqual(parseGroup({ count: 5, dimensions: { clientRequestPath: '/.env', edgeResponseStatus: 404 } }), { count: 5, record: { path: '/.env', query: '', ua: null, addr: '', method: 'GET', status: 404 } });
+  assert.equal(parseGroup({ count: 2, dimensions: { clientRequestPath: '/', clientRequestQuery: 'from=wrong-turn', userAgent: '' } }).record.query, '?from=wrong-turn');
+  assert.equal(parseGroup({ count: 2, dimensions: { clientRequestPath: '/', userAgent: '' } }).record.ua, '');
+  assert.equal(parseGroup({ count: 2, dimensions: { edgeResponseStatus: 404 } }).record, null);
+
+  const t = logTally({ tags: ['wrong-turn'] });
+  for (const row of analyticsGroups(JSON.stringify(graphqlResponse([[
+    [3560, '/.env', 404], [280, '/.git/config', 404], [12, '/wp-login.php', 403], [2, '/.env.production', 200],
+    [40, '/', 500, 'POST'], [900, '/about', 200], [55, '/nope', 404], [1, '/', 200, 'GET', { clientRequestQuery: '?from=wrong-turn' }],
+  ], [[6, '/.aws/credentials', 404], [0, '/.ssh/id_rsa', 404]]]))).rows) t.addGroup(row);
+  t.addGroup({ count: 9, dimensions: { edgeResponseStatus: 404 } }); // no path: counted as a row, not read
+  const r = t.result();
+  assert.equal(r.source, 'analytics groups');
+  assert.deepEqual(r.groups, { rows: 11, read: 10 });
+  assert.equal(r.parsed, 3560 + 280 + 12 + 2 + 40 + 900 + 55 + 1 + 6);
+  assert.equal(r.probes, 3560 + 280 + 12 + 2 + 40 + 6);
+  assert.equal(r.breakdown.other_misses, 55);
+  assert.deepEqual(r.kinds.find((k) => k.kind === 'env files').statuses, { 404: 3560, 200: 2 });
+  assert.deepEqual(r.kinds.find((k) => k.kind === 'env files').families, { 'User agent not in the data': 3562 });
+  assert.deepEqual(r.succeeded_or_crashed, [{ request: '500 POST /', count: 40 }, { request: '200 GET /.env.production', count: 2 }]);
+  assert.deepEqual(r.prank_links_followed, { 'wrong-turn': 1 });
+  assert.equal(r.no_user_agent, 0);
+  assert.equal(r.addresses_in_data, false);
+  assert.equal(r.busiest_address, null);
+  const text = formatLogs(r).join('\n');
+  assert.match(text, /^Read 10 of 11 analytics rows \(1 without a path\), standing for 4856 requests\./);
+  assert.match(text, /sampled estimates/);
+  assert.match(text, /The data has no addresses/);
+  assert.match(text, /The data has no user agents/);
+  assert.doesNotMatch(text, /sent no user agent/);
+});
+
+test('analytics rows with addresses and user agents are counted per address, and the report keeps none', () => {
+  const t = logTally();
+  const row = (count, path, ua, ip) => ({ count, dimensions: { clientRequestPath: path, edgeResponseStatus: 404, userAgent: ua, clientIP: ip } });
+  for (const r of [row(50, '/.env', 'Mozilla/5.0 (compatible; GPTBot/1.2)', '192.0.2.50'), row(10, '/about', 'Mozilla/5.0', '198.51.100.7')]) t.addGroup(r);
+  const r = t.result();
+  assert.equal(r.busiest_address.requests, 50);
+  assert.equal(r.probe_addresses, 1);
+  assert.deepEqual(r.probes_under_crawler_names, { requests: 50, names: { gptbot: 50 } });
+  assert.doesNotMatch(formatLogs(r).join('\n') + JSON.stringify(r), /192\.0\.2|198\.51\.100/);
 });

@@ -13,7 +13,7 @@ npx security-pranks-audit example.com
 ```
 
 ```
-Agent security pranks: upstateny.news  (security-pranks-audit v1.1.0)
+Agent security pranks: upstateny.news  (security-pranks-audit v1.2.0)
 Probed https://upstateny.news. Prank found: yes. Framework: Next.js.
 
 Required
@@ -23,13 +23,13 @@ Required
   PASS  P6  Real pages never get the prank       read 10 of 19 sitemap pages: none answered with the prank
   PASS  H1  Unused methods refused               POST / answers 405, PUT / answers 405, Allow: GET, HEAD
   PASS  H2  Unused framework endpoints refused   Next.js: /_next/image answers 404
-  PASS  X1  No retaliation                       every answer within 0.4 seconds, the largest 9.9 KB, no redirects off the site
+  PASS  X1  No retaliation                       every answer within 0.3 seconds, the largest 9.9 KB, no redirects off the site
   ...
 Recommended
   PASS  C1  A prank answers the probes           7 of 7 probes that reached the site get a prank (404 text/plain); /wp-config.php blocked by Cloudflare before it reached the site
-  PASS  C2  A note for AI agents                 the prank has a note addressed to AI agents, and gives them no orders
+  PASS  C2  A note for AI agents                 the prank has a note addressed to AI agents in the body, gives them no orders. Add a link to /.well-known/security.txt, so a real researcher has a way to report
 
-Score on 2026-10-23: required 10 of 10, recommended 2 of 2
+Score on 2026-10-24: required 10 of 10, recommended 2 of 2
 ```
 
 This repo holds:
@@ -78,7 +78,7 @@ security-pranks-audit --logs <access-log> [--tag text ...] [--json]
 | `--compare file` | list what changed since a previous run: a status page from `--matrix` or a saved `--json` report |
 | `--matrix` | score several sites, three at a time, and print one markdown status page |
 | `--tag text` | with `--logs`, count the requests that arrive through your prank's links: pass the tag they carry (any format), once per tag |
-| `--logs file` | count probes in an exported access log (combined log format, or JSON lines from Cloudflare, Vercel or Railway): secret files, dev-server file reads, actuator and heap dumps, framework logs, backups, WordPress and PHP, infrastructure endpoints, unused methods. By kind, status and client family, with the busiest address's share of traffic, probes sent under well-known crawler names, any probe that got a 2xx or a 5xx, and the prank's tagged links that came back. It prints counts, never addresses |
+| `--logs file` | count probes in an exported access log (combined log format, or JSON lines from Cloudflare, Vercel or Railway), or in a saved Cloudflare GraphQL Analytics answer for a site with no log export ([recipe](docs/recipes.md#logs-without-a-log-export-cloudflares-analytics-t2)), each row weighted by its count: secret files, dev-server file reads, actuator and heap dumps, framework logs, backups, WordPress and PHP, infrastructure endpoints, unused methods. By kind, status and client family, with the busiest address's share of traffic, probes sent under well-known crawler names, any probe that got a 2xx or a 5xx, and the prank's tagged links that came back. It prints counts, never addresses |
 
 From a clone, run `node bin/security-pranks-audit.mjs example.com`.
 

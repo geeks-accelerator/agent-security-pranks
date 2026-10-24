@@ -4,15 +4,16 @@
 //
 //   security-pranks-audit <domain> [--json] [--compare previous] [--base url]
 //   security-pranks-audit --matrix <domain> <domain> ...   (a markdown status page)
-//   security-pranks-audit --logs <access-log> [--tag text ...] [--json]   (probe counts, before and after)
+//   security-pranks-audit --logs <access-log> [--tag text ...] [--json]   (probe counts, before and after;
+//                                                          an access log or a saved Cloudflare GraphQL Analytics response)
 //
 // Exits 1 when a required check fails, so it can gate a deploy.
 
-import { readFileSync, createReadStream } from 'node:fs';
+import { readFileSync, createReadStream, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { audit, matrix, score, LEVELS, REVIEW, VERSION } from '../src/audit.mjs';
 import { parsePrevious, compareResults, formatComparison, mapLimit } from '../src/helpers.mjs';
-import { logTally, formatLogs } from '../src/logs.mjs';
+import { logTally, formatLogs, analyticsGroups } from '../src/logs.mjs';
 
 // engines in package.json only warns, so say it plainly before anything fails oddly.
 // Each supported Node line at its current security release (the 2026-10-21 release fixed a
@@ -59,7 +60,16 @@ if (base) {
 if (logsPath) {
   const tally = logTally({ tags });
   try {
-    for await (const line of createInterface({ input: createReadStream(logsPath), crlfDelay: Infinity })) tally.add(line);
+    // A saved GraphQL Analytics response is one JSON document, often spread over many lines, and small
+    // (a query returns at most a few thousand rows). An access log can be large, so it streams.
+    const analytics = statSync(logsPath).size <= 64 * 1024 * 1024 ? analyticsGroups(readFileSync(logsPath, 'utf8')) : null;
+    if (analytics?.errors.length && !analytics.rows.length) {
+      console.error(`${logsPath} is an analytics response with errors and no rows: ${analytics.errors.slice(0, 3).join('; ')}`);
+      process.exit(2);
+    }
+    if (analytics) for (const row of analytics.rows) tally.addGroup(row);
+    else for await (const line of createInterface({ input: createReadStream(logsPath), crlfDelay: Infinity })) tally.add(line);
+    if (analytics?.errors.length) console.error(`Warning: the analytics response also has errors: ${analytics.errors.slice(0, 3).join('; ')}`);
   } catch (e) { console.error(`Couldn't read ${logsPath}: ${e.message}`); process.exit(2); }
   const rep = tally.result();
   console.log(flag('--json') ? JSON.stringify(rep, null, 2) : formatLogs(rep).join('\n'));
@@ -86,8 +96,9 @@ Options:
   --base url    score a local or preview build as the domain, before you
                 deploy (http://localhost:3000)
   --logs f      count secret-hunting probes in an exported access log
-                (combined log format or JSON lines), by kind, status and
-                client family; prints counts, never addresses
+                (combined log format or JSON lines) or a saved Cloudflare
+                GraphQL Analytics response, by kind, status and client
+                family; prints counts, never addresses
   --tag text    with --logs: count requests whose query carries this text,
                 the tag your prank's links use (repeat for each tag)
 
