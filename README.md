@@ -37,6 +37,7 @@ This repo holds:
 - **[STANDARD.md](STANDARD.md):** the Agent Security Pranks Standard. What to do, item by item, each with an ID, a level and the harm it prevents: hardening (H), prank rules (P), things never to do (X), what to serve (C), and tests and measurement (T).
 - **`security-pranks-audit`:** the scorecard. It checks a live site against everything the standard can verify from outside, 12 checks in about 20 requests plus up to 10 sitemap pages, and lists what it can't see for you to review.
 - **[The Scanner Prank Playbook](docs/scanner-prank-playbook.md):** the field guide the standard comes from, with the measurements, the menu of pranks and code for Next.js, Express and nginx.
+- **[Who else talks to scanners](docs/research/who-else-talks-to-scanners.md):** joke and decoy answers on probe paths elsewhere, and sites that address AI agents in headers. Most decoys are honeypots served with a 200; none we found combine a safe 404 with an invitation to the operator.
 - **[Bots in AI clothing](docs/research/bots-in-ai-clothing.md):** a week of traffic across 56 domains on Cloudflare, with charts. 1 in 12 requests was a probe, none came from a verified AI crawler, and the biggest scanner wore twenty AI-crawler names.
 
 ## Why this one

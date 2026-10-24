@@ -54,7 +54,7 @@ test('every item the scorecard leaves to review is in the standard checklist', (
 });
 
 test('no em dashes in the docs', () => {
-  for (const file of ['README.md', 'STANDARD.md', 'AGENTS.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/adopting.md', 'docs/recipes.md', 'docs/scanner-prank-playbook.md', 'docs/research/bots-in-ai-clothing.md']) {
+  for (const file of ['README.md', 'STANDARD.md', 'AGENTS.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/adopting.md', 'docs/recipes.md', 'docs/scanner-prank-playbook.md', 'docs/research/bots-in-ai-clothing.md', 'docs/research/who-else-talks-to-scanners.md']) {
     assert.doesNotMatch(read(file), /\u2014/, file);
   }
 });
