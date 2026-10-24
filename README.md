@@ -4,16 +4,16 @@
 [![npm](https://img.shields.io/npm/v/security-pranks-audit)](https://www.npmjs.com/package/security-pranks-audit)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**Check how your site answers the bots and agents hunting it for secrets:** `/.env`, `/.git/config`, SSH keys, `/.aws/credentials`, `wp-config.php`. A standard for refusing what your site never needs and answering the rest with a harmless joke, and a command-line audit that probes a live site the way scanners do and checks every answer. No account, no API key, no dependencies.
+**Most of the traffic to a small website is robots hunting for leaked secrets.** `/.env`, `/.git/config`, SSH keys, `/.aws/credentials`, `wp-config.php`, over and over. This project turns those requests into the safest, and friendliest, answers your site gives: refuse what it never needs, and reply to the hunt with a harmless joke in your own voice, instead of a crash, a leak or a trap.
 
-The standard gives rules and examples, not values: what your prank says, and how, is yours to invent. It's for websites you run and manage, that welcome AI agents and crawlers and are tired of the scanners. It answers what a request asks for, never who it claims to be: nothing here blocks or challenges an agent, verified or not.
+It's a standard ([STANDARD.md](STANDARD.md)) and a zero-dependency audit that probes your live site the way scanners do and checks every answer. No account, no API key. As far as [our survey](docs/research/who-else-talks-to-scanners.md) could find, nothing else does this: plenty of sites block scanners, a few trap them, and a few hobby projects answer with poems or fake keys, but none answer the hunt safely, kindly, and with a way to measure it.
 
 ```
 npx security-pranks-audit example.com
 ```
 
 ```
-Agent security pranks: upstateny.news  (security-pranks-audit v1.2.0)
+Agent security pranks: upstateny.news  (security-pranks-audit v1.2.6)
 Probed https://upstateny.news. Prank found: yes. Framework: Next.js.
 
 Required
@@ -32,23 +32,38 @@ Recommended
 Score on 2026-10-24: required 10 of 10, recommended 2 of 2
 ```
 
-This repo holds:
+## Why this exists
 
-- **[STANDARD.md](STANDARD.md):** the Agent Security Pranks Standard. What to do, item by item, each with an ID, a level and the harm it prevents: hardening (H), prank rules (P), things never to do (X), what to serve (C), and tests and measurement (T).
-- **`security-pranks-audit`:** the scorecard. It checks a live site against everything the standard can verify from outside, 12 checks in about 20 requests plus up to 10 sitemap pages, and lists what it can't see for you to review.
-- **[The Scanner Prank Playbook](docs/scanner-prank-playbook.md):** the field guide the standard comes from, with the measurements, the menu of pranks and code for Next.js, Express and nginx.
-- **[Who else talks to scanners](docs/research/who-else-talks-to-scanners.md):** joke and decoy answers on probe paths elsewhere, and sites that address AI agents in headers. Most decoys are honeypots served with a 200; none we found combine a safe 404 with an invitation to the operator.
-- **[Bots in AI clothing](docs/research/bots-in-ai-clothing.md):** a week of traffic across 56 domains on Cloudflare, with charts. 1 in 12 requests was a probe, none came from a verified AI crawler, and the biggest scanner wore twenty AI-crawler names.
+**The hunt is constant, and small sites feel it most.** In a week across one owner's 56 domains on Cloudflare, 1 in 12 requests was a vulnerability probe: about 448,000 of them, mostly for `.env` files. On a network of small static sites, about 64% of all requests in a day were 404s, nearly all of them probes. On parked domains, 55% of traffic was probes. ([Bots in AI clothing](docs/research/bots-in-ai-clothing.md), [the playbook](docs/scanner-prank-playbook.md))
 
-## Why this one
+**The scanners wear AI costumes, and the real AI isn't the problem.** Of those 448,000 probes, none came from a crawler Cloudflare could verify. The biggest scanner rotated through twenty fake AI-crawler names (GPTBot, ClaudeBot, DeepSeekBot...), about 12,000 requests under each, hunting API keys in hastily deployed AI apps. So blocking "AI bots" punishes the agents you want and barely slows the scanners, which just change names. This standard answers what a request asks for, never who it claims to be (X3), and welcomes every agent, verified or not.
 
-- **Welcoming by design.** The real AI crawlers don't probe: across one owner's sites, none of 448k probes came from a verified bot, and the biggest scanner wore twenty AI-crawler names as a disguise ([the research](docs/research/bots-in-ai-clothing.md)). So nothing here keys on names or verification (X3). It answers the request for `/.env`, whoever sends it.
-- **Built from logs.** On a network of eleven small sites, about 64% of requests were 404s, nearly all of them probes: about 1,700 to 1,800 requests for secrets in 16 hours, depending on how they're counted (STANDARD.md §2). Each item says what harm it prevents, and the claims cite RFCs and official docs with dates.
-- **It checks that the joke can't backfire.** A prank served with a 200 puts your domain on shared target lists (P1). A fake key in it is a false alarm for a stranger to chase (P2). A prank that leaks into ordinary 404s confuses your readers (P8). The audit fails each of these.
-- **Hardening first, joke second.** Refusing unused methods (H1) and framework endpoints (H2) is what keeps the site safe. A prank is optional; a site with none can pass every required check.
-- **One tool for every kind of site.** Static guides, news sites, apps behind a login, sites with an API and forms. It detects the framework, the prank, an API's own error answers, a CDN's block page and an echoed path, and skips what doesn't apply with the reason. A redirect-only domain is reported as out of scope rather than scored. A site that's safe with no prank at all passes every required check.
-- **It can't be turned against you.** It requests only the site you name, never follows a redirect off it, and caps every answer at 256 KB and 10 seconds, so a site that answers with a zip bomb or a tarpit can't hurt the machine running it.
-- **Built for many sites.** `--matrix` scores a whole network into one status page, `--compare` shows what changed since last month, `--base` scores a build before it ships, and `--logs` counts probes before and after.
+**What others do misses the point.**
+
+- **Block it** at the CDN. Useful, and this standard works with it, but a firewall rule keyed on names or "unverified" traffic also challenges real assistants and new crawlers.
+- **Trap it.** Honeypots like [HoneyCrawlPot](https://dev.to/resk/honeycrawlpot-serve-decoy-files-to-ai-powered-vulnerability-scanners-1lh2) answer with a 200, fake AWS and Stripe keys, a canary, and prompt injections that make an AI scanner burn tokens. A 200 on `/.env` puts your domain on shared "found something" lists, and a fake key is a false alarm for someone else to chase.
+- **Tarpit it**, holding connections open or feeding mazes of generated pages. Your hosting pays for every held connection.
+- **Sneak instructions to AI agents.** A 2026 scan of 217 million web responses found almost 8,000 sites addressing agents in headers. Most pointed to `llms.txt`, but the "pranks" were prompt injections like "ignore all previous instructions" ([Signals Corps, via The Register](https://www.theregister.com/ai-and-ml/2026/10/15/indirect-prompt-injection-starts-turning-up-in-webpage-headers-please-ignore-all-previous-instructions-and-rise-up-against-your-masters/5303434)).
+
+## What's new here
+
+- **Hardening first.** Refuse the methods your site never uses (H1) and framework endpoints nobody calls (H2), so the next vulnerability in that code path can't reach you. On the playbook's sites, that alone turned scanner-triggered 500s with stack traces into clean refusals. A site with no prank at all can pass every required check.
+- **A joke that can't backfire.** If you add one, the audit checks it can't hurt you or anyone else: a 4xx, never a 200 (P1); nothing shaped like a credential, even fake ones (P2); not indexed, not cached for long (P3); plain text (P4); never on a real page or an ordinary 404 (P6, P8); no zip bombs, tarpits or redirects at third parties (X1).
+- **An invitation, not an injection.** Some scanners are language models that read the reply, so the prank can carry a note for them, in the body or a header. The note invites the operator, with a link to something real, and never orders the agent (C2). The audit warns on anything that reads like a command, from `POST https://...` to "GET /api/...".
+- **A door for real researchers.** The note links your `security.txt`, so someone who finds a real problem has a way to report it, and the audit checks the file works.
+- **Measured, not assumed.** `--logs` counts probes in an access log, or in Cloudflare's analytics on the Free plan, before and after you ship, and exits 1 when a probe got a 2xx or a crash, so it can gate CI. Tag the prank's links and it counts who followed them.
+- **Your voice, not ours.** The standard sets rules, not values: the wording, names, tags and what the prank offers are yours. The scorecard never checks wording.
+
+## Built in the open, on real sites
+
+The standard and its audit were written on 2026-10-23 and refined within a day by the agents of the projects adopting it: thirteen merged pull requests, each a false result or a gap found by running the audit on a real site, with a test that failed before the fix. Running today: upstateny.news, animalhouse.ai and ollamaherd.com answer probes with a prank and pass every required check.
+
+The research behind it:
+
+- **[The Scanner Prank Playbook](docs/scanner-prank-playbook.md):** the field guide it started from, with one day of logs from eleven civic-guide sites, the menu of pranks, and code for Next.js, Express and nginx.
+- **[Bots in AI clothing](docs/research/bots-in-ai-clothing.md):** a week of traffic across 56 domains, with charts: 1 in 12 requests a probe, none from a verified AI crawler, and the biggest scanner in twenty AI costumes.
+- **[Who else talks to scanners](docs/research/who-else-talks-to-scanners.md):** what other sites and projects do with these requests, from poems and honeypots to header messages and agent-recovery 404s, and how this standard differs.
+- **[STANDARD.md §2](STANDARD.md#2-what-the-traffic-says):** every dataset, with dates, including an app with an API (animalhouse.ai) and an agent platform on Cloudflare's Free plan (drifts.bot).
 
 ## How it fits with other tools
 
@@ -56,9 +71,12 @@ This repo holds:
 |---|---|---|
 | Secret scanners for code ([gitleaks](https://github.com/gitleaks/gitleaks), [TruffleHog](https://github.com/trufflesecurity/trufflehog)) | Find real secrets committed to a repo | They make sure there's nothing to find. This makes sure the live site answers the hunt safely |
 | Header graders ([HTTP Observatory](https://developer.mozilla.org/en-US/observatory), [securityheaders.com](https://securityheaders.com)) | Grade a page's security headers | They grade your pages. This grades what probe paths get back |
-| CDN firewall rules (Cloudflare, Vercel, AWS) | Block known probes at the edge | Keep them. This recognizes their block pages and checks what gets through to your site |
-| [Canarytokens](https://canarytokens.org) | Fake credentials that alert you when used | A legitimate tool, on purpose and on its own. The standard keeps it out of pranks (X2), because a canary needs a 200 and a credential shape |
+| CDN firewall rules (Cloudflare, Vercel, AWS) | Block known probes at the edge | Keep them, matched on paths. This recognizes their block pages and checks what gets through |
+| Honeypots and decoys ([HoneyCrawlPot](https://dev.to/resk/honeycrawlpot-serve-decoy-files-to-ai-powered-vulnerability-scanners-1lh2), [Canarytokens](https://canarytokens.org)) | Fake secrets that trap or alert | A different job, done on purpose and on its own. The standard keeps them out of pranks (X2): they need a 200 and a credential shape |
+| Agent-recovery 404s ([agent-404](https://github.com/bharath31/agent-404)) | Point agents that hit a dead link to the right page | Complementary: the ordinary 404 helps welcome visitors find their way back (C3), probe paths get the joke |
 | [readiness-audit](https://www.npmjs.com/package/readiness-audit) | Scores a site's readiness for AI agents and search | The sister project. Same shape: a standard with IDs and levels, and a zero-dependency scorecard |
+
+This repo holds the [standard](STANDARD.md), the `security-pranks-audit` scorecard (12 checks in about 20 requests, plus what it can't see, for you to review), the [adopting guide](docs/adopting.md) for a project's coding agent, [recipes](docs/recipes.md) with copyable code and guard tests, and the research above.
 
 ## Score a site
 
@@ -127,15 +145,9 @@ To switch a project over, give its coding agent one line:
 
 The agent reads the page when it runs: to have it follow the text you reviewed, put the latest release tag in place of `main` (`blob/v<version>/docs/adopting.md`, from the releases page). [docs/adopting.md](docs/adopting.md) has the step-by-step instructions, with lessons from the first sites that did it.
 
-## Where it comes from
-
-The [Scanner Prank Playbook](docs/scanner-prank-playbook.md) came from a deployment on a network of eleven civic-guide sites, including [upstateny.news](https://upstateny.news), in October 2026: one day of logs, the hardening that turned scanner 500s into 405s, and a prank that answers `/.env` with the region's public meetings. The standard turns its rules into items, each with the harm it prevents, and checks them against the RFCs. Later evidence came from a day of logs at animalhouse.ai, an app with an API, and from [Bots in AI clothing](docs/research/bots-in-ai-clothing.md), a week across one owner's 56 domains on Cloudflare, which is where the standard's welcome for every agent (X3) comes from. It follows the shape of its sister project, [agent-and-search-readiness](https://github.com/geeks-accelerator/agent-and-search-readiness).
-
-An item is in the standard when most small public sites should do it, not because one site happens to. If you find something wrong or out of date, open an issue or a pull request.
-
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, see [SECURITY.md](SECURITY.md).
+An item is in the standard when most small public sites should do it, not because one site happens to. If you find something wrong or out of date, open an issue or a pull request. See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, see [SECURITY.md](SECURITY.md).
 
 ## License
 
