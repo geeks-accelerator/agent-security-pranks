@@ -124,7 +124,7 @@ To switch a project over, give its coding agent one line:
 
 > Adopt the Agent Security Pranks Standard in this repo by following https://github.com/geeks-accelerator/agent-security-pranks/blob/main/docs/adopting.md
 
-The agent reads the page when it runs: to have it follow the text you reviewed, put a release tag in place of `main` (`blob/v1.1.3/docs/adopting.md`). [docs/adopting.md](docs/adopting.md) has the step-by-step instructions, with lessons from the first sites that did it.
+The agent reads the page when it runs: to have it follow the text you reviewed, put the latest release tag in place of `main` (`blob/v<version>/docs/adopting.md`, from the releases page). [docs/adopting.md](docs/adopting.md) has the step-by-step instructions, with lessons from the first sites that did it.
 
 ## Where it comes from
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.2 (2026-10-24)
+
+Docs only, from animalhouse.ai reviewing 1.2.0. No check changes.
+
+- **H3 says what happened at animalhouse, and asks for an exact version.** 1.2.0 read as a host lagging a day ("Railway's builder still chose Node 24.21.0 the day after 24.22.1 shipped"). The project had pinned `>=24.22.1 <25`, and Railpack 0.43 resolved it to 24.21.0, outside the range, without failing the build. So H3 now pins an exact version (a range is a request a builder may not honor), and "done when" asks that the running server report it. The playbook, in both forms, says the same.
+- **The release-tag example no longer names an old release.** adopting.md and the README suggested `blob/v1.1.3/docs/adopting.md`, which an agent would copy and follow without 1.1.4 to 1.2.0. They now say to use the latest tag, `blob/v<version>/...`, from the releases page.
+
 ## 1.2.1 (2026-10-24)
 
 From four project agents' reports on 1.2.0, each fix with a test that fails without it. Two false failures fixed, `--logs` clearer, and one new exit code.
