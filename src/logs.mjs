@@ -155,10 +155,11 @@ export function logTally({ tags: wanted = [] } = {}) {
   // Requests with a method other than GET or HEAD, held per "method path" until
   // the end: on a site with an API, POST /api/... is real traffic. A method and
   // path that got a 2xx anywhere in the log is one the site serves, and so is one
-  // that got a 303 (a form that POSTs and redirects). Any other redirect isn't: a
-  // scanner's POSTs often get a 307 or 308 on the way to a crash.
+  // that got a 302 or 303: a form that POSTs and redirects (Express, Django and Rails
+  // redirect with 302 by default). A 307 or 308 isn't: they keep the method, and a
+  // scanner's POSTs often get one on the way to a crash.
   const methodRequests = new Map(); // "METHOD path" -> [{ record, n }]
-  const served = new Set(); // "METHOD path" that got a 2xx or a 303
+  const served = new Set(); // "METHOD path" that got a 2xx, a 302 or a 303
   let methodsResolved = false;
   const add = (map, key, n) => map.set(key, (map.get(key) ?? 0) + n);
   // n identical requests counted as probes of this kind. ua is null when the data has no user agents.
@@ -196,7 +197,7 @@ export function logTally({ tags: wanted = [] } = {}) {
     const methodKind = kind === `${r.method} requests`;
     if (methodKind) {
       const key = `${r.method} ${r.path}`;
-      if ((r.status >= 200 && r.status < 300) || r.status === 303) served.add(key);
+      if ((r.status >= 200 && r.status < 300) || r.status === 302 || r.status === 303) served.add(key);
       if (!methodRequests.has(key)) methodRequests.set(key, []);
       methodRequests.get(key).push({ record: r, n });
     }

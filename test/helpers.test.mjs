@@ -384,8 +384,12 @@ test('a redirect is not a site serving a method: scanner POSTs that got a 307 an
   assert.equal(logsFail(rep), true);
   assert.ok(rep.succeeded_or_crashed.some((h) => h.request === '500 POST /'), JSON.stringify(rep.succeeded_or_crashed));
   assert.equal(rep.kinds.find((k) => k.kind === 'POST requests')?.requests, 7);
-  // A form that posts and redirects with 303, or an API that answers 2xx, is still served.
+  // A form that posts and redirects with 302 or 303, or an API that answers 2xx, is still served;
+  // a 307 or 308 keeps the method, so it isn't.
   assert.equal(logsFail(tally([line('POST', '/contact', 303), line('POST', '/contact', 500)])), false);
+  assert.equal(logsFail(tally([line('POST', '/signup', 302), line('POST', '/signup', 500)])), false);
+  assert.equal(tally([line('POST', '/signup', 302), line('POST', '/signup', 302)]).probes, 0, 'a 302 form is traffic, not probes');
+  assert.equal(logsFail(tally([line('POST', '/app', 308), line('POST', '/app', 500)])), true);
   assert.equal(logsFail(tally([line('POST', '/api/pets', 201), line('POST', '/api/pets', 500)])), false);
 });
 
