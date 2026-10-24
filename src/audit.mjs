@@ -10,7 +10,7 @@
 import { request, TIMEOUT_MS } from './http.mjs';
 import { PROBES, FRAMEWORK_ENDPOINTS, homeLinks, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, taggedLinks, agentHeaders, sharedWords, holdsWords } from './helpers.mjs';
 
-export const VERSION = '1.2.6';
+export const VERSION = '1.2.7';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
 const UA = `security-pranks-audit/${VERSION} (+${REPO})`;
 export const LEVELS = ['required', 'recommended'];

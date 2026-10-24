@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.7 (2026-10-24)
+
+The README, rewritten from the research, so the npm page shows it. No checks change.
+
+- **The README leads with the research:** why this exists (1 in 12 requests a probe, none from a verified AI crawler), what others do with these requests and where it falls short, what's new here, and links to every research note.
+- A plainer opening, the contrast with blocking and honeypots, a quick start and a next step.
+
 ## 1.2.6 (2026-10-24)
 
 From the research note [who else talks to scanners](docs/research/who-else-talks-to-scanners.md). No required check changes.
