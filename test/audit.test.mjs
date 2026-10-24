@@ -38,7 +38,7 @@ test('the good fixture passes every scored check', async () => {
   assert.equal(rep.framework, 'Next.js');
   assert.match(by.P6.detail, /read 4 of 4 sitemap pages/);
   assert.match(by.C2.detail, /points real researchers to a working security\.txt/);
-  assert.match(by.C2.detail, /in the body and a header \(x-note-for-agents\)/);
+  assert.match(by.C2.detail, /in the body and a header \(x-fixture-agent-line\)/);
   assert.match(by.C1.detail, /^7 of 7 probes that reached the site get a prank .*\/wp-config\.php blocked by Cloudflare/);
 
   // --logs reads what the audit just requested, and names it.
