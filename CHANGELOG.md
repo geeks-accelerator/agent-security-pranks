@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.4 (2026-10-24)
 
 `--logs` finds every scanner 5xx it was built to find again, and the audit finds a prank that a varying 404 page hid. From reviews of 1.2.0 to 1.2.3, each fix with a test that fails without it.
 
