@@ -105,7 +105,7 @@ footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--r
 <ul class="rules">
   <li><span><strong>Refuse methods you do not use.</strong> A read-only site answers anything but <code>GET</code> and <code>HEAD</code> with <code>405</code> and <code>Allow: GET, HEAD</code>. On our sites this turned framework 500s with stack traces in the log into clean refusals.</span></li>
   <li><span><strong>Refuse framework endpoints you do not use.</strong> Next.js serves its image optimizer at <code>/_next/image</code> even if no page uses it, and that endpoint carried a critical remote-code-execution advisory in 2026. Return <code>404</code> for it.</span></li>
-  <li><span><strong>Pin your runtime and patch it.</strong> If nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release: on 2026-10-22, Railway's builder still chose Node 24.21.0 the day after 24.22.1 shipped.</span></li>
+  <li><span><strong>Pin your runtime and patch it.</strong> If nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release: on 2026-10-22, a project pinned to <code>&gt;=24.22.1 &lt;25</code> got Node 24.21.0. Railway's builder (Railpack 0.43) resolved the range to a version outside it, the day after 24.22.1 shipped, and the build didn't fail.</span></li>
 </ul>
 
 <h2>The ground rules</h2>

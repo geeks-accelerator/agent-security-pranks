@@ -156,11 +156,11 @@ Answer `404` for the endpoint in middleware or the proxy, before the framework. 
 
 ### H3. Pin your runtime and patch it
 
-**Level:** recommended. **Why:** if nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release: on 2026-10-22, Railway's builder still chose Node 24.21.0 the day after 24.22.1 shipped.
+**Level:** recommended. **Why:** if nothing pins your Node (or Python, or PHP) version, your host picks one, and its default can lag a security release: on 2026-10-22, a project pinned to `>=24.22.1 <25` got Node 24.21.0. Railway's builder (Railpack 0.43) resolved the range to a version outside it, the day after 24.22.1 shipped, and the build didn't fail.
 
-Pin the runtime in the project (`engines`, `.nvmrc`, `.python-version`, the host's setting) to a version on its current security release, and update it when one ships.
+Pin the runtime in the project (`engines`, `.nvmrc`, `.python-version`, the host's setting) to an exact version on its current security release, and update it when one ships. A range says what you'd accept, and a builder may not honor it; an exact version leaves nothing to resolve. After a deploy, read the version the build log reports, or ask the running server.
 
-**Done when:** the version is pinned in the repo and current. **Checked in review.**
+**Done when:** an exact version is pinned in the repo, it's current, and the running server reports it. **Checked in review.**
 
 ### H4. Edge rules match behavior, and keep agents welcome
 
