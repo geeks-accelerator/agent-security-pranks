@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.1 (2026-10-24)
+
+From four project agents' reports on 1.2.0, each fix with a test that fails without it. Two false failures fixed, `--logs` clearer, and one new exit code.
+
+**Fewer false failures:**
+- **X1 retries a silent probe once.** A probe with no answer in 10 seconds, or a body still arriving then, used to fail X1 as "a tarpit" on a single try; one network blip could fail a site. Only a second silence in a row fails it now.
+- **H1 doesn't fail a site with nothing at `/`.** An API-only domain whose homepage is a 404 was reported as "a guard refuses reads". Only a `GET` or `HEAD` refused with 405, or a crash, counts as refusing reads; any other answer is noted and fine.
+
+**`--logs`:**
+- **Exits 1 when a probe got a 2xx or a 5xx,** like the audit on a required failure, so the before-and-after step (T2) can gate CI. Families a site may really serve (`.php`, backups) are marked "may be real traffic" and don't count toward the exit code.
+- **Analytics without query strings** (Cloudflare's Free plan doesn't offer `clientRequestQuery`) says the prank's tags can't be counted from it, instead of suggesting `--tag`.
+- **Redirects Cloudflare sends itself** (`originResponseStatus` 0, such as `www` to the bare domain) are labeled "at the edge", not listed as the site redirecting a probe.
+
+**CLI:** several domains without `--matrix` exit 2 with a message, instead of scoring only the first.
+
+**Wording:** P5's skip line says an ordinary 404 has "no HTML hole" (it said "echoes the path escaped", not always true); C1 says "a link that carries a query string" (any query counts, not only tags).
+
+**Docs:** the Cloudflare recipe adds drifts.bot's measured Free-plan limits (30-day queries, 31 days back, 10,000 rows; `userAgent` and `clientIP` available, `clientRequestQuery` not), `originResponseStatus` and `clientRequestHTTPHost`, and states only what was verified about log export. adopting.md drops advice to add noindex and a cache to an ordinary 404, which named no harm.
+
 ## 1.2.0 (2026-10-24)
 
 From adopting the standard on drifts.bot (Next.js on Railway, behind Cloudflare's Free plan, an API and an MCP server): its proposals from PR #5, rebuilt on 1.1.6. A new input format, so a minor version.

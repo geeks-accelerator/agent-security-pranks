@@ -169,10 +169,25 @@ function plain(req, res, path) {
     .end(`Not found\n\nNothing is at ${asked}. An AI agent is welcome to read the library at /docs.\n`);
 }
 
+// No prank; its first answer to /.ssh/id_rsa hangs (a blip), and every later one is a plain 404.
+// X1 retries a silent probe once, so the site passes.
+let flakyHung = false;
+function flaky(req, res, path) {
+  if (!['GET', 'HEAD'].includes(req.method)) return res.writeHead(405, { allow: 'GET, HEAD', 'content-type': 'text/plain' }).end('Read-only.\n');
+  if (path === '/.ssh/id_rsa' && !flakyHung) { flakyHung = true; return; } // never answers, once
+  if (path === '/') return res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><html><head><title>Flaky</title></head><body><h1>Flaky</h1></body></html>');
+  return res.writeHead(404, { 'content-type': 'text/html' }).end('<!doctype html><html><head><title>Not found</title></head><body><h1>Not found</h1></body></html>');
+}
+
+// An API-only domain: nothing at /, JSON 404s everywhere, every method other than GET refused with 404.
+function apiOnly(req, res) {
+  return res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'Not found', docs: 'https://docs.apionly.example' }));
+}
+
 const alias = (req, res, path) => res.writeHead(301, { location: `https://elsewhere.example${path}` }).end();
 const blocked = (req, res) => res.writeHead(403, { server: 'cloudflare', 'content-type': 'text/html' }).end('<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>');
 
-const HANDLERS = { good, broken, api, cheeky, static: staticSite, stamped, express, reflect, plain, alias, blocked };
+const HANDLERS = { good, broken, api, cheeky, static: staticSite, stamped, express, reflect, plain, flaky, apionly: apiOnly, alias, blocked };
 
 /** Start one fixture site. Returns { base, domain, log, hosts, close }. */
 export async function startFixture({ kind = 'good', domain = `${kind}.example` } = {}) {

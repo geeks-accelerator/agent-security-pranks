@@ -63,18 +63,21 @@ export function parseLine(line) {
 // docs/recipes.md.
 const GROUP_FIELDS = {
   path: 'clientRequestPath', query: 'clientRequestQuery', method: 'clientRequestHTTPMethodName',
-  status: 'edgeResponseStatus', ua: 'userAgent', addr: 'clientIP',
+  status: 'edgeResponseStatus', ua: 'userAgent', addr: 'clientIP', origin: 'originResponseStatus',
 };
 const isGroup = (x) => x && typeof x === 'object' && Number.isFinite(x.count) && x.dimensions && typeof x.dimensions === 'object';
 
 /** One analytics row as { record, count }; record is null when the row has no path. A dimension the
- *  query left out is null for the user agent (unknown, not empty) and empty for the address. */
+ *  query left out is null for the user agent and the query string (unknown, not empty), and empty for
+ *  the address. edge is true for a redirect Cloudflare sent itself (originResponseStatus 0), such as
+ *  www to the bare domain or http to https: the site never saw the request. */
 export function parseGroup(row) {
   const d = row.dimensions;
   const count = Math.max(0, Math.round(row.count));
   if (typeof d[GROUP_FIELDS.path] !== 'string') return { record: null, count };
   const q = d[GROUP_FIELDS.query];
-  const query = typeof q === 'string' && q ? (q.startsWith('?') ? q : `?${q}`) : '';
+  const query = !(GROUP_FIELDS.query in d) ? null : typeof q === 'string' && q ? (q.startsWith('?') ? q : `?${q}`) : '';
+  const status = Number(d[GROUP_FIELDS.status]) || 0;
   return {
     count,
     record: {
@@ -82,7 +85,8 @@ export function parseGroup(row) {
       ua: GROUP_FIELDS.ua in d ? String(d[GROUP_FIELDS.ua] ?? '') : null,
       addr: String(d[GROUP_FIELDS.addr] ?? ''),
       method: String(d[GROUP_FIELDS.method] ?? 'GET').toUpperCase(),
-      status: Number(d[GROUP_FIELDS.status]) || 0,
+      status,
+      edge: status >= 300 && status < 400 && GROUP_FIELDS.origin in d && Number(d[GROUP_FIELDS.origin]) === 0,
     },
   };
 }
@@ -137,7 +141,7 @@ const share = (n, of) => (of ? Math.round((n / of) * 1000) / 10 : 0);
  * a request whose query contains one counts as a prank link followed.
  */
 export function logTally({ tags: wanted = [] } = {}) {
-  let lines = 0, parsed = 0, notFound = 0, probeTotal = 0, otherMisses = 0, noUa = 0, uaUnknown = 0, disguised = 0;
+  let lines = 0, parsed = 0, notFound = 0, probeTotal = 0, otherMisses = 0, noUa = 0, uaUnknown = 0, queryUnknown = 0, edgeRedirects = 0, disguised = 0;
   let groups = 0, groupsRead = 0; // analytics rows, when fed by addGroup instead of add
   const disguises = new Map(); // claimed crawler name -> probes sent under it
   const statuses = new Map(); // class -> count, all traffic
@@ -164,9 +168,14 @@ export function logTally({ tags: wanted = [] } = {}) {
     if (!kinds.has(kind)) kinds.set(kind, { requests: 0, statuses: new Map(), families: new Map() });
     const k = kinds.get(kind);
     k.requests += n;
-    add(k.statuses, r.status, n);
+    add(k.statuses, r.edge ? `${r.status} at the edge` : r.status, n);
+    if (r.edge) edgeRedirects += n;
     add(k.families, r.ua === null ? 'User agent not in the data' : family(ua), n);
-    if ((r.status >= 200 && r.status < 300) || r.status >= 500) add(hits, `${r.status} ${r.method} ${r.path.slice(0, 80)}`, n);
+    if ((r.status >= 200 && r.status < 300) || r.status >= 500) {
+      const key = `${r.status} ${r.method} ${r.path.slice(0, 80)}`;
+      if (!hits.has(key)) hits.set(key, { count: 0, kind, maybeReal: MAYBE_REAL.has(kind) });
+      hits.get(key).count += n;
+    }
   };
   // One parsed request, or n identical ones (an analytics row).
   function addRecord(r, n) {
@@ -176,6 +185,7 @@ export function logTally({ tags: wanted = [] } = {}) {
     if (r.status === 404) notFound += n;
     if (r.ua === null) uaUnknown += n;
     else if (!ua || ua === '-') noUa += n;
+    if (r.query === null) queryUnknown += n;
     const query = decodeQuery(r.query);
     for (const t of wanted) if (query.includes(t)) add(tags, t, n);
     const kind = probeKind(r);
@@ -244,13 +254,18 @@ export function logTally({ tags: wanted = [] } = {}) {
         busiest_address: busiest ? { requests: busiest.requests, share: share(busiest.requests, parsed), probes_or_misses: share(busiest.probes + busiest.misses, busiest.requests), paths: busiest.paths.size, no_user_agent: busiest.noUa === busiest.requests } : null,
         scanner_addresses: { count: scanners.length, requests: scanners.reduce((n, a) => n + a.requests, 0) },
         kinds: [...kinds].map(([kind, k]) => ({ kind, requests: k.requests, may_include_real_traffic: MAYBE_REAL.has(kind), statuses: sorted(k.statuses), families: sorted(k.families) })).sort((a, b) => b.requests - a.requests),
-        succeeded_or_crashed: [...hits].map(([key, n]) => ({ request: key, count: n })).sort((a, b) => b.count - a.count),
-        prank_links_followed: wanted.length ? Object.fromEntries(wanted.map((t) => [t, tags.get(t) ?? 0])) : null,
+        succeeded_or_crashed: [...hits].map(([key, h]) => ({ request: key, count: h.count, kind: h.kind, may_include_real_traffic: h.maybeReal })).sort((a, b) => b.count - a.count),
+        edge_redirects: edgeRedirects,
+        query_not_in_data: queryUnknown > 0 && queryUnknown === parsed,
+        prank_links_followed: wanted.length && !(queryUnknown > 0 && queryUnknown === parsed) ? Object.fromEntries(wanted.map((t) => [t, tags.get(t) ?? 0])) : null,
         probes_under_crawler_names: { requests: disguised, names: sorted(disguises) },
       };
     },
   };
 }
+
+/** True when the report should fail a CI step: a probe got a 2xx or a 5xx, outside families a site may really serve. */
+export const logsFail = (rep) => rep.succeeded_or_crashed.some((h) => !h.may_include_real_traffic);
 
 /** The report as text. */
 export function formatLogs(rep) {
@@ -278,12 +293,14 @@ export function formatLogs(rep) {
   out.push('');
   if (rep.succeeded_or_crashed.length) {
     out.push('Probes that got a 2xx or a 5xx (P1, H1: each should be a 4xx):');
-    for (const h of rep.succeeded_or_crashed.slice(0, 20)) out.push(`  ${String(h.count).padStart(6)}  ${h.request}`);
+    for (const h of rep.succeeded_or_crashed.slice(0, 20)) out.push(`  ${String(h.count).padStart(6)}  ${h.request}${h.may_include_real_traffic ? '  [may be real traffic]' : ''}`);
     if (rep.succeeded_or_crashed.length > 20) out.push(`  and ${rep.succeeded_or_crashed.length - 20} more`);
   } else out.push('Every probe got something other than a 2xx or a 5xx.');
   const d = rep.probes_under_crawler_names;
   if (d.requests) out.push('', `Probes sent under a well-known crawler's name: ${d.requests} (${Object.entries(d.names).slice(0, 8).map(([n, c]) => `${n} ${c}`).join(', ')}${Object.keys(d.names).length > 8 ? ', ...' : ''}). Real crawlers don't probe: these are scanners wearing the name. Answer the behavior, not the name (X3).`);
+  if (rep.edge_redirects) out.push('', `${rep.edge_redirects} probe${rep.edge_redirects === 1 ? '' : 's'} got a redirect from the CDN itself ("at the edge", such as www to the bare domain or http to https): the site never saw them, and the redirected request is counted on its own.`);
   if (rep.prank_links_followed) out.push('', 'Prank links followed (C1, T2):', ...Object.entries(rep.prank_links_followed).map(([t, n]) => `  ${String(n).padStart(6)}  ${t}`));
+  else if (rep.query_not_in_data) out.push('', 'This data has no query strings, so the prank\'s tagged links can\'t be counted. Cloudflare\'s Free plan doesn\'t offer the query string in analytics; count tags from a log that keeps it.');
   else out.push('', 'To count visits through the prank\'s links, pass the tags they carry: --tag <text> (repeat for each).');
   out.push('', 'Run it on a day of logs before you ship and again after: scanner 5xx should drop to zero, and every probe should stay a failure (STANDARD.md, T2).');
   return out;
