@@ -2,7 +2,7 @@
 
 *A short survey, 2026-10-24: who answers secret-hunting probes with something other than a plain 404, and who uses a site's responses to address AI agents.*
 
-The short answer: pieces of it exist, mostly pointing the other way from this standard. Joke and decoy answers on probe paths are a small hobby scene, nearly all of them served with a 200 and fake credentials. Messages to AI agents in response headers are emerging, mostly as pointers to `llms.txt`, with a handful of prompt-injection pranks. We found no one combining a safe 404 on probe paths, a joke in the product's voice, an invitation to the operator rather than an order, a tagged link to measure follow-through, and a `security.txt` door for real researchers.
+The short answer: pieces of it exist, mostly pointing the other way from this standard. Joke and decoy answers on probe paths are a small hobby scene, nearly all of them served with a 200 and fake credentials. 404s that help agents recover from real misses are growing, and sit alongside this standard rather than overlapping it. Messages to AI agents in response headers are emerging, mostly as pointers to `llms.txt`, with a handful of prompt-injection pranks. We found no one combining a safe 404 on probe paths, a joke in the product's voice, an invitation to the operator rather than an order, a tagged link to measure follow-through, and a `security.txt` door for real researchers.
 
 ## Joke and decoy answers on probe paths
 
@@ -11,6 +11,10 @@ The short answer: pieces of it exist, mostly pointing the other way from this st
 - **[itsfake](https://github.com/ro80t/itsfake/pull/10)** serves fake secrets at scanned paths, varied by framework and randomized per request. **[scannerbait](https://github.com/fcp999/scannerbait)** does the same, with its fake credentials marked as decoys and pointing at reserved domains.
 
 How this standard differs: those are honeypots, and most need a 200 and credential-shaped values to work. This standard answers with a 4xx (P1), nothing shaped like a credential (P2), no traps or token burning (X1), no canaries dressed as pranks (X2), and a note that invites rather than orders (C2).
+
+## 404s that help agents recover
+
+A separate, growing practice treats ordinary 404s as a channel agents read, for **recovery**: when an agent or search bot asks for a page that moved or never existed, the 404 points it to the right one. **[agent-404](https://github.com/bharath31/agent-404)** keeps the 404 status and adds RFC 5988 `Link` headers with ranked alternatives, a schema.org `ItemList` in the body, and a suggestions API, aimed at coding assistants and AI search. Others put a pointer to `llms.txt` or the API docs in their 404 bodies. That's help for welcome visitors on real misses; this standard's prank is the other side, for paths no welcome visitor asks for. The two fit together: the ordinary 404 can recover (and P8 keeps the prank out of it), while probe paths get the joke.
 
 ## Messages to AI agents in headers
 
@@ -46,6 +50,7 @@ Most scanners read the status code and never the body, as Honeypo(e)t's author f
 
 Read 2026-10-24.
 
+- [agent-404](https://github.com/bharath31/agent-404) (its site, agent404.dev, answered 404 on 2026-10-24)
 - [Honeypo(e)t, Show HN](https://news.ycombinator.com/item?id=47123849)
 - [HoneyCrawlPot, DEV Community](https://dev.to/resk/honeycrawlpot-serve-decoy-files-to-ai-powered-vulnerability-scanners-1lh2)
 - [itsfake, PR #10](https://github.com/ro80t/itsfake/pull/10) and [scannerbait](https://github.com/fcp999/scannerbait)
