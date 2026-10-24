@@ -10,7 +10,7 @@
 import { request, TIMEOUT_MS } from './http.mjs';
 import { PROBES, FRAMEWORK_ENDPOINTS, homeLinks, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, taggedLinks, agentHeaders, sharedWords, holdsWords } from './helpers.mjs';
 
-export const VERSION = '1.2.5';
+export const VERSION = '1.2.6';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
 const UA = `security-pranks-audit/${VERSION} (+${REPO})`;
 export const LEVELS = ['required', 'recommended'];
@@ -25,7 +25,7 @@ export const REVIEW = [
   ['P6', 'the probe pattern matches none of your real routes: run it over every route in a test (the scorecard reads a sample of the sitemap)'],
   ['P7', 'any fact the prank states appears word for word in the published source, checked by a test'],
   ['X2', 'no canary tokens dressed up as a prank'],
-  ['C3', 'the 404 page has a line for people, in the product\'s voice, pointing somewhere useful'],
+  ['C3', 'the 404 page offers a way back: a line and a link for people, in the product\'s voice, and a pointer agents can follow (suggestions, a Link header, llms.txt)'],
   ['C4', 'a public page of misses, if you have one: paths and counts only, never addresses, and every path cleaned before it goes on the page'],
   ['T1', 'each check runs against the built server and was seen failing once with the feature off'],
   ['T2', 'a day of logs read before and after (security-pranks-audit --logs)'],
