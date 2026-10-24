@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <rect width="1280" height="640" fill="#10151c"/>
+  <rect x="0" y="0" width="1280" height="6" fill="#4ade80"/>
+
+  <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif" fill="#f1f5f9">
+    <text x="72" y="150" font-size="64" font-weight="700">Agent Security</text>
+    <text x="72" y="226" font-size="64" font-weight="700" fill="#4ade80">Pranks</text>
+    <text x="72" y="300" font-size="28" fill="#cbd5e1">Turn the bots hunting your site</text>
+    <text x="72" y="340" font-size="28" fill="#cbd5e1">for secrets into its safest answers.</text>
+    <text x="72" y="430" font-size="22" fill="#94a3b8">A standard and a zero-dependency audit.</text>
+    <text x="72" y="464" font-size="22" fill="#94a3b8">No account, no API key, no traps.</text>
+  </g>
+  <g font-family="Menlo, Monaco, monospace" font-size="22">
+    <rect x="72" y="520" width="470" height="56" rx="10" fill="#1e293b"/>
+    <text x="94" y="556" fill="#4ade80">$</text>
+    <text x="120" y="556" fill="#f1f5f9">npx security-pranks-audit</text>
+  </g>
+
+  <g transform="translate(640 96)">
+    <rect width="568" height="448" rx="14" fill="#0b0f14" stroke="#273445" stroke-width="2"/>
+    <circle cx="28" cy="28" r="7" fill="#f87171"/>
+    <circle cx="52" cy="28" r="7" fill="#fbbf24"/>
+    <circle cx="76" cy="28" r="7" fill="#4ade80"/>
+    <g font-family="Menlo, Monaco, monospace" font-size="19">
+      <text x="28" y="90" fill="#94a3b8">GET /.env</text>
+      <text x="300" y="90" fill="#4ade80">404</text>
+      <text x="28" y="124" fill="#94a3b8">GET /.git/config</text>
+      <text x="300" y="124" fill="#4ade80">404</text>
+      <text x="28" y="158" fill="#94a3b8">GET /wp-config.php</text>
+      <text x="300" y="158" fill="#4ade80">403</text>
+      <text x="28" y="192" fill="#94a3b8">POST /</text>
+      <text x="300" y="192" fill="#4ade80">405</text>
+      <line x1="28" y1="218" x2="540" y2="218" stroke="#273445" stroke-width="2"/>
+      <text x="28" y="256" fill="#4ade80">PASS</text><text x="96" y="256" fill="#e2e8f0">P1  Probes answer with a failure</text>
+      <text x="28" y="290" fill="#4ade80">PASS</text><text x="96" y="290" fill="#e2e8f0">P2  Nothing shaped like a key</text>
+      <text x="28" y="324" fill="#4ade80">PASS</text><text x="96" y="324" fill="#e2e8f0">H1  Unused methods refused</text>
+      <text x="28" y="358" fill="#4ade80">PASS</text><text x="96" y="358" fill="#e2e8f0">X1  No retaliation</text>
+      <text x="28" y="408" fill="#f1f5f9" font-weight="700">required 10 of 10</text>
+    </g>
+  </g>
+</svg>

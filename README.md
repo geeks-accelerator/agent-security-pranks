@@ -4,6 +4,8 @@
 [![npm](https://img.shields.io/npm/v/security-pranks-audit)](https://www.npmjs.com/package/security-pranks-audit)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
+![Agent Security Pranks: probes for .env, .git/config and wp-config.php answered with 404, 403 and 405, and the audit passing](docs/social-preview.png)
+
 **Turn the bots hunting your site for secrets into its safest answers.** On many small websites, most requests are bots asking for `/.env`, `/.git/config`, SSH keys or `wp-config.php`. This project is a standard ([STANDARD.md](STANDARD.md)) and a zero-dependency audit that checks how your live site answers: a clean 4xx, nothing shaped like a credential, and, if you want, a harmless joke in your own voice with a note for the AI agents that read it. No account, no API key, no traps.
 
 Blocking treats every probe the same, and catches agents you want along the way. Honeypots answer with a 200 and fake keys, which puts your domain on scanners' lists of sites where they found something. This answers the request safely, measures what happens, and can leave a note for the agents that read the body. As far as [our survey](docs/research/who-else-talks-to-scanners.md) could find, nothing else combines those.

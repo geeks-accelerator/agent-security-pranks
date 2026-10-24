@@ -1,7 +1,7 @@
 {
   "name": "security-pranks-audit",
   "version": "1.2.7",
-  "description": "Check that your site answers .env, .git and other secret-hunting probes safely: a 4xx status, no credential-shaped strings, no-store, noindex, plain text, no retaliation. The scorecard for the Agent Security Pranks Standard.",
+  "description": "Turn the bots hunting your site for secrets (.env, .git, SSH keys) into its safest answers. A standard and zero-dependency audit: a clean 4xx, nothing shaped like a credential, no traps, and, if you want, a harmless joke with a note for the AI agents that read it.",
   "type": "module",
   "bin": {
     "security-pranks-audit": "bin/security-pranks-audit.mjs"
@@ -22,6 +22,11 @@
     "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
   },
   "keywords": [
+    "ai-agents",
+    "ai-crawlers",
+    "web-security",
+    "security-txt",
+    "cloudflare",
     "security",
     "security-headers",
     "vulnerability-scanner",
