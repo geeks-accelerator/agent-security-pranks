@@ -2,12 +2,13 @@
 
 ## Unreleased
 
-`--logs` found every scanner 5xx it was built to find again. No audit check changes.
+`--logs` finds every scanner 5xx it was built to find again, and the audit finds a prank that a varying 404 page hid. From reviews of 1.2.0 to 1.2.3, each fix with a test that fails without it.
 
 - **A redirect no longer means a site serves a method.** Since 1.1.6, a method and path that got a 2xx or a 3xx anywhere in the log counted as served, and its requests weren't probes. On a real Railway log, a scanner's fake Server Action POSTs to `/`, `/api` and `/app` each got a 307 as well as a 500, so all three paths counted as served: the report showed "5xx 4" in its totals, then "Every probe got something other than a 2xx or a 5xx", and exited 0. Only a 2xx, or a 302 or 303 (a form that POSTs and redirects; Express, Django and Rails use 302 by default), counts as served now. A 307 or 308 keeps the method, so it doesn't.
 - **A 5xx always counts.** Since 1.2.3, a probe in a family a site may really serve (`.php`, backups, a framework endpoint its pages use) was left out of the exit code whatever its status, so a scanner asking `/_next/image` for a remote SVG and getting a 500, the pattern behind GHSA-2464-fhr4-w9xw, exited 0. The exemption now covers a 2xx only.
 - Two tests, each failing on 1.2.3: the scanner's POSTs from that log, and a 5xx on the image optimizer, a `.php` path and a backup file.
 - **STANDARD.md H3** cites both incidents of 2026-10-22: the playbook's sites pinned nothing and Railpack chose its default, Node 24.21.0, and another project's range (`>=24.22.1 <25`) resolved to the same version outside it. 1.2.2 gave only the second, under a reason ("if nothing pins your Node version") that described the first. The playbook says the same. T2 and the README say a 5xx always counts.
+- **A prank sent like a varying 404 page is found and graded.** Since 1.1.5, on a site whose 404 page differs on every request (a request ID, a nonce), only an env-shaped answer, or one with another status or content type, counted as a prank. A prank in prose, sent as the same plain-text 404 as the site's page, was never found, so P3, P4 and C2 skipped it: a prank with no noindex passed every required check. The scorecard now takes the words the two missing pages share as the page's fixed part, and an answer without every one of them is a prank. When the two share no words, status and content type alone decide, as before. New fixture: `stampedprank`. Can newly fail a site whose varying 404 hid a prank that breaks a required rule.
 
 ## 1.2.3 (2026-10-24)
 

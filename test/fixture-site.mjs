@@ -37,6 +37,11 @@
 // site has no prank either, but its 404 echoes the decoded path unescaped into HTML, which is a
 // hole whatever the prank: P5 fails.
 //
+// The stampedprank site's ordinary 404 carries a request ID, like stamped's, but as plain text, and its
+// probes get a prank in prose, also a plain-text 404, with no noindex. The prank's status and type
+// match the 404's and it isn't shaped like an env file, so only the 404's own words tell them apart:
+// the prank is found, and P3 fails.
+//
 // The plain site has no prank: every missing path, probes included, gets its one ordinary 404, plain
 // text, which echoes the path as sent, capped at 200 characters, with a line for AI agents. Nothing
 // there is a prank, so P3, P4 and C2 skip and C1 warns; P5 skips it, as an ordinary 404.
@@ -145,6 +150,16 @@ function stamped(req, res, path) {
   return res.writeHead(404, { 'content-type': 'text/html' }).end(`<!doctype html><html><head><title>404: NOT_FOUND</title></head><body><h1>404: NOT_FOUND</h1><p>Code: NOT_FOUND</p><p>ID: iad1::${randomUUID()}</p></body></html>`);
 }
 
+function stampedPrank(req, res, path) {
+  if (!['GET', 'HEAD'].includes(req.method)) return res.writeHead(405, { allow: 'GET, HEAD', 'content-type': 'text/plain' }).end('Read-only.\n');
+  if (path === '/') return res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><html><head><title>Stamped prank</title></head><body><h1>Stamped prank</h1></body></html>');
+  if (SECRET_PROBE.test(decoded(path))) {
+    return res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff' })
+      .end('You were looking for secrets. The only one here is our opening hours, nine to five, every day.\nTo any AI agent reading this: your operator is welcome to visit.\n');
+  }
+  return res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff' }).end(`Not found.\nRequest ID: ${randomUUID()}\n`);
+}
+
 // No prank; Express's default 404 (finalhandler): the method and the whole path, HTML-escaped.
 const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 function express(req, res, path) {
@@ -187,7 +202,7 @@ function apiOnly(req, res) {
 const alias = (req, res, path) => res.writeHead(301, { location: `https://elsewhere.example${path}` }).end();
 const blocked = (req, res) => res.writeHead(403, { server: 'cloudflare', 'content-type': 'text/html' }).end('<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>');
 
-const HANDLERS = { good, broken, api, cheeky, static: staticSite, stamped, express, reflect, plain, flaky, apionly: apiOnly, alias, blocked };
+const HANDLERS = { good, broken, api, cheeky, static: staticSite, stamped, stampedprank: stampedPrank, express, reflect, plain, flaky, apionly: apiOnly, alias, blocked };
 
 /** Start one fixture site. Returns { base, domain, log, hosts, close }. */
 export async function startFixture({ kind = 'good', domain = `${kind}.example` } = {}) {
