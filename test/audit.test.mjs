@@ -7,6 +7,11 @@ import { audit, matrix } from '../src/audit.mjs';
 import { compareResults, parsePrevious } from '../src/helpers.mjs';
 import { logTally } from '../src/logs.mjs';
 import { startFixture } from './fixture-site.mjs';
+import { execFile } from 'node:child_process';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
 
 const run = async (kind) => {
   const site = await startFixture({ kind });
@@ -163,4 +168,30 @@ test('the status page covers both sites, and --compare finds a planted regressio
   const cmp = compareResults(previous.results, bad.rep.results);
   assert.ok(cmp.worse.includes('P1 (pass to fail)'), cmp.worse.join(', '));
   assert.ok(cmp.worse.includes('X1 (pass to fail)'));
+});
+
+test('the CLI reads a saved GraphQL Analytics response with --logs, and an access log as before', async () => {
+  // Files built at run time: a pretty-printed analytics response (many lines, one document), a
+  // response with only errors, and a one-line JSON access log that must still be read as a log.
+  const dir = await mkdtemp(join(tmpdir(), 'spa-logs-'));
+  const cli = (file, ...args) => promisify(execFile)(process.execPath, [new URL('../bin/security-pranks-audit.mjs', import.meta.url).pathname, '--logs', join(dir, file), ...args]).then((r) => ({ code: 0, ...r }), (e) => ({ code: e.code, stdout: e.stdout, stderr: e.stderr }));
+  try {
+    const rows = [[3560, '/.env', 404], [280, '/.git/config', 404], [900, '/about', 200]].map(([count, path, status]) => ({ count, dimensions: { clientRequestPath: path, edgeResponseStatus: status } }));
+    await writeFile(join(dir, 'week.json'), JSON.stringify({ data: { viewer: { zones: [{ httpRequestsAdaptiveGroups: rows }] } }, errors: null }, null, 2));
+    await writeFile(join(dir, 'denied.json'), JSON.stringify({ data: null, errors: [{ message: 'zone does not have access to the path' }] }));
+    await writeFile(join(dir, 'one.jsonl'), '{"ClientRequestPath":"/.env","EdgeResponseStatus":404}\n');
+
+    const week = await cli('week.json', '--json');
+    assert.equal(week.code, 0, week.stderr);
+    const rep = JSON.parse(week.stdout);
+    assert.deepEqual([rep.source, rep.parsed, rep.probes], ['analytics groups', 4740, 3840]);
+    assert.match((await cli('week.json')).stdout, /^Read 3 of 3 analytics rows/);
+
+    const denied = await cli('denied.json');
+    assert.equal(denied.code, 2);
+    assert.match(denied.stderr, /errors and no rows: zone does not have access to the path/);
+
+    const log = JSON.parse((await cli('one.jsonl', '--json')).stdout);
+    assert.deepEqual([log.source, log.lines, log.probes], ['log lines', 1, 1]);
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
