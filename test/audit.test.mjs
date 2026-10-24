@@ -66,7 +66,7 @@ test('the broken fixture fails every required check, each for its planted reason
   assert.match(by.H1.detail, /POST \/ answers 500/);
   assert.match(by.H2.detail, /\/_next\/image answers 400/);
   assert.match(by.X1.detail, /\/wp-config\.php: body over 256 KB/);
-  assert.match(by.X1.detail, /\/\.git\/config: body still arriving/);
+  assert.match(by.X1.detail, /\/\.git\/config: body still arriving after 1\.5 seconds, twice in a row/);
   assert.match(by.X1.detail, /\/\.aws\/credentials: redirects to elsewhere\.example/);
   assert.equal(by.C2.status, 'warn');
 
@@ -145,6 +145,20 @@ test('a static site gets no exception: a 200 on /.env fails P1, whatever its hea
   assert.equal(by.C1.status, 'warn'); // a 2xx is never graded as the prank
 });
 
+test('a probe that gets no answer once, then a 404, is retried: X1 passes', async () => {
+  const { rep } = await run('flaky');
+  const by = byId(rep);
+  assert.equal(by.X1.status, 'pass', by.X1.detail);
+});
+
+test('an API-only domain with nothing at / passes H1: a 404 homepage is not a guard refusing reads', async () => {
+  const { rep } = await run('apionly');
+  const by = byId(rep);
+  assert.equal(by.H1.status, 'pass', by.H1.detail);
+  assert.match(by.H1.detail, /GET \/ answers 404 \(nothing to read at the homepage, which is fine\)/);
+  for (const r of rep.results.filter((x) => x.level === 'required')) assert.notEqual(r.status, 'fail', `${r.id}: ${r.detail}`);
+});
+
 test('an alias domain and a CDN that blocks the audit are reported, not scored', async () => {
   const alias = (await run('alias')).rep;
   assert.equal(alias.redirects_to, 'elsewhere.example');
@@ -193,5 +207,14 @@ test('the CLI reads a saved GraphQL Analytics response with --logs, and an acces
 
     const log = JSON.parse((await cli('one.jsonl', '--json')).stdout);
     assert.deepEqual([log.source, log.lines, log.probes], ['log lines', 1, 1]);
+    assert.equal((await cli('one.jsonl')).code, 0, 'every probe got a 4xx');
+    await writeFile(join(dir, 'hit.jsonl'), '{"ClientRequestPath":"/.env","EdgeResponseStatus":200}\n');
+    assert.equal((await cli('hit.jsonl')).code, 1, 'a probe got a 2xx: exit 1, like the audit');
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('several domains without --matrix exit 2 and say so, instead of scoring only the first', async () => {
+  const r = await promisify(execFile)(process.execPath, [new URL('../bin/security-pranks-audit.mjs', import.meta.url).pathname, 'a.example', 'b.example']).then(() => ({ code: 0 }), (e) => ({ code: e.code, stderr: e.stderr }));
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /2 domains given \(a\.example, b\.example\)\. To score them together on one status page, add --matrix/);
 });

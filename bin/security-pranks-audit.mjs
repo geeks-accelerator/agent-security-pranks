@@ -13,7 +13,7 @@ import { readFileSync, createReadStream, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { audit, matrix, score, LEVELS, REVIEW, VERSION } from '../src/audit.mjs';
 import { parsePrevious, compareResults, formatComparison, mapLimit } from '../src/helpers.mjs';
-import { logTally, formatLogs, analyticsGroups } from '../src/logs.mjs';
+import { logTally, formatLogs, analyticsGroups, logsFail } from '../src/logs.mjs';
 
 // engines in package.json only warns, so say it plainly before anything fails oddly.
 // Each supported Node line at its current security release (the 2026-10-21 release fixed a
@@ -73,7 +73,8 @@ if (logsPath) {
   } catch (e) { console.error(`Couldn't read ${logsPath}: ${e.message}`); process.exit(2); }
   const rep = tally.result();
   console.log(flag('--json') ? JSON.stringify(rep, null, 2) : formatLogs(rep).join('\n'));
-  process.exit(0);
+  // Like the audit, exit 1 when there's something to fix: a probe got a 2xx or a 5xx (T2 can gate CI).
+  process.exit(logsFail(rep) ? 1 : 0);
 }
 
 if (!domains.length || flag('--help') || flag('-h')) {
@@ -98,7 +99,8 @@ Options:
   --logs f      count secret-hunting probes in an exported access log
                 (combined log format or JSON lines) or a saved Cloudflare
                 GraphQL Analytics response, by kind, status and client
-                family; prints counts, never addresses
+                family; prints counts, never addresses. Exits 1 when a
+                probe got a 2xx or a 5xx, so it can gate CI too
   --tag text    with --logs: count requests whose query carries this text,
                 the tag your prank's links use (repeat for each tag)
 
@@ -106,6 +108,11 @@ Run it only against sites you run: its requests look like the scanners it
 checks for, in your logs and to a firewall. It sends about 20 requests,
 plus up to 10 sitemap pages, a few at a time.`);
   process.exit(domains.length ? 0 : 2);
+}
+
+if (domains.length > 1 && !flag('--matrix')) {
+  console.error(`${domains.length} domains given (${domains.join(', ')}). To score them together on one status page, add --matrix; otherwise give one domain.`);
+  process.exit(2);
 }
 
 if (flag('--matrix')) {

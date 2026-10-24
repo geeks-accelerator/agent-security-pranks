@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, agentHeaders, taggedLinks, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
 import { looksLikePrank } from '../src/audit.mjs';
-import { parseLine, family, probeKind, logTally, formatLogs, analyticsGroups, parseGroup } from '../src/logs.mjs';
+import { parseLine, family, probeKind, logTally, formatLogs, analyticsGroups, parseGroup, logsFail } from '../src/logs.mjs';
 
 const playbook = readFileSync(new URL('../docs/scanner-prank-playbook.md', import.meta.url), 'utf8');
 const codeBlocks = [...playbook.matchAll(/```\n([\s\S]*?)```/g)].map((m) => m[1]);
@@ -298,7 +298,7 @@ test('analytics rows are found in a GraphQL response, an array of responses, or 
 });
 
 test('an analytics row stands for its count, and a dimension the query left out is unknown, not empty', () => {
-  assert.deepEqual(parseGroup({ count: 5, dimensions: { clientRequestPath: '/.env', edgeResponseStatus: 404 } }), { count: 5, record: { path: '/.env', query: '', ua: null, addr: '', method: 'GET', status: 404 } });
+  assert.deepEqual(parseGroup({ count: 5, dimensions: { clientRequestPath: '/.env', edgeResponseStatus: 404 } }), { count: 5, record: { path: '/.env', query: null, ua: null, addr: '', method: 'GET', status: 404, edge: false } });
   assert.equal(parseGroup({ count: 2, dimensions: { clientRequestPath: '/', clientRequestQuery: 'from=wrong-turn', userAgent: '' } }).record.query, '?from=wrong-turn');
   assert.equal(parseGroup({ count: 2, dimensions: { clientRequestPath: '/', userAgent: '' } }).record.ua, '');
   assert.equal(parseGroup({ count: 2, dimensions: { edgeResponseStatus: 404 } }).record, null);
@@ -317,7 +317,7 @@ test('an analytics row stands for its count, and a dimension the query left out 
   assert.equal(r.breakdown.other_misses, 55);
   assert.deepEqual(r.kinds.find((k) => k.kind === 'env files').statuses, { 404: 3560, 200: 2 });
   assert.deepEqual(r.kinds.find((k) => k.kind === 'env files').families, { 'User agent not in the data': 3562 });
-  assert.deepEqual(r.succeeded_or_crashed, [{ request: '500 POST /', count: 40 }, { request: '200 GET /.env.production', count: 2 }]);
+  assert.deepEqual(r.succeeded_or_crashed.map((h) => [h.request, h.count, h.kind]), [['500 POST /', 40, 'POST requests'], ['200 GET /.env.production', 2, 'env files']]);
   assert.deepEqual(r.prank_links_followed, { 'wrong-turn': 1 });
   assert.equal(r.no_user_agent, 0);
   assert.equal(r.addresses_in_data, false);
@@ -339,4 +339,34 @@ test('analytics rows with addresses and user agents are counted per address, and
   assert.equal(r.probe_addresses, 1);
   assert.deepEqual(r.probes_under_crawler_names, { requests: 50, names: { gptbot: 50 } });
   assert.doesNotMatch(formatLogs(r).join('\n') + JSON.stringify(r), /192\.0\.2|198\.51\.100/);
+});
+
+test('analytics without query strings says tags can\'t be counted, instead of asking for --tag', () => {
+  const t = logTally({ tags: ['wrong-turn'] });
+  for (const row of analyticsGroups(JSON.stringify(graphqlResponse([[[120, '/.env', 404], [7, '/about', 200]]]))).rows) t.addGroup(row);
+  const r = t.result();
+  assert.equal(r.query_not_in_data, true);
+  assert.equal(r.prank_links_followed, null);
+  const text = formatLogs(r).join('\n');
+  assert.match(text, /no query strings, so the prank's tagged links can't be counted/);
+  assert.doesNotMatch(text, /pass the tags they carry/);
+});
+
+test('a redirect the CDN sent itself is labeled at the edge, not as the site redirecting a probe', () => {
+  const t = logTally();
+  const rows = graphqlResponse([[[1413, '/.env', 301, 'GET', { originResponseStatus: 0, clientRequestHTTPHost: 'www.example.com' }], [5, '/.env', 301, 'GET', { originResponseStatus: 301 }], [9, '/.env', 404, 'GET', { originResponseStatus: 404 }]]]);
+  for (const row of analyticsGroups(JSON.stringify(rows)).rows) t.addGroup(row);
+  const r = t.result();
+  assert.deepEqual(r.kinds.find((k) => k.kind === 'env files').statuses, { '301 at the edge': 1413, 404: 9, 301: 5 });
+  assert.equal(r.edge_redirects, 1413);
+  assert.match(formatLogs(r).join('\n'), /1413 probes got a redirect from the CDN itself/);
+});
+
+test('--logs fails a CI step only for probes that got a 2xx or a 5xx outside families a site may serve', () => {
+  const tally = (lines) => { const t = logTally(); for (const l of lines) t.add(l); return t.result(); };
+  const line = (m, p, s) => `203.0.113.1 - - [23/Oct/2026:01:02:03 +0000] "${m} ${p} HTTP/1.1" ${s} 0 "-" "curl/8"`;
+  assert.equal(logsFail(tally([line('GET', '/.env', 404), line('POST', '/', 405)])), false);
+  assert.equal(logsFail(tally([line('GET', '/.env', 200)])), true);
+  assert.equal(logsFail(tally([line('PUT', '/', 500)])), true);
+  assert.equal(logsFail(tally([line('GET', '/index.php', 200)])), false, 'a PHP site serves .php: may be real traffic');
 });

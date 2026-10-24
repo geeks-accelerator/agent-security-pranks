@@ -10,7 +10,7 @@
 import { request, TIMEOUT_MS } from './http.mjs';
 import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, taggedLinks, agentHeaders } from './helpers.mjs';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.1';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
 const UA = `security-pranks-audit/${VERSION} (+${REPO})`;
 export const LEVELS = ['required', 'recommended'];
@@ -98,8 +98,13 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   const missingPath2 = `/no-such-page-${rand}-again`;
   const framework = FRAMEWORK_ENDPOINTS.find((f) => f.detect(home)) ?? null;
 
+  // A probe that got no answer, or whose body was still arriving at the deadline, gets one more try:
+  // a network blip shouldn't fail a site on X1. Only a second silence counts.
+  const quiet = (r) => r.slow || (r.status === 0 && /no answer/.test(r.error ?? ''));
+  const getTwice = async (url) => { const r = await get(url); return quiet(r) ? { ...(await get(url)), retried: true } : r; };
+
   const [missing, missing2, head, post, put, fw, robots, sitemap, ...probes] = await mapLimit([
-    () => get(origin + missingPath),
+    () => getTwice(origin + missingPath),
     () => get(origin + missingPath2),
     () => get(`${origin}/`, { method: 'HEAD' }),
     () => get(`${origin}/`, { method: 'POST', body: '' }),
@@ -107,7 +112,7 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     () => (framework && !framework.used(home) ? get(origin + framework.path) : null),
     () => get(`${origin}/robots.txt`, { follow: true }),
     () => get(`${origin}/sitemap.xml`, { follow: true }),
-    ...[...PROBES, echoPath].map((p) => () => get(origin + p)),
+    ...[...PROBES, echoPath].map((p) => () => getTwice(origin + p)),
   ], LIMIT, (job) => job());
   const probeRows = probes.map((r, i) => ({ path: [...PROBES, echoPath][i], r }));
   const shown = (p) => (p === echoPath ? '/.env.<echo test>' : p);
@@ -221,7 +226,7 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     const prankEcho = isPrank(echoRow);
     const problems = found && !prankEcho ? found.filter((x) => /HTML tag/.test(x)) : found;
     if (!found) skip(id, name, level, 'the prank doesn\'t echo the requested path');
-    else if (!prankEcho && !problems.length) skip(id, name, level, 'the echo test got the site\'s ordinary 404, which echoes the path escaped; the prank rules don\'t apply to it');
+    else if (!prankEcho && !problems.length) skip(id, name, level, 'the echo test got the site\'s ordinary 404, with no HTML hole; the prank rules don\'t apply to it');
     else if (problems.length) wrong(id, name, level, `${problems.join('; ')}: the scanner controls the path, so strip it to printable ASCII and cap its length`);
     else pass(id, name, level, 'the echoed path comes back as printable ASCII with a length cap');
   }
@@ -249,8 +254,10 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   // ---- H1 refuse methods the site doesn't use (required) ----
   {
     const id = 'H1', name = 'Unused methods refused', level = 'required';
-    // A homepage behind a login (401) still shows the guard: it answered. Any other failure refuses reads.
-    const readable = (r) => (r.status >= 200 && r.status < 400) || r.status === 401;
+    // A guard that refuses too much answers GET or HEAD with 405, or crashes. Anything else answered:
+    // a homepage behind a login (401), or nothing at / on an API-only domain (404), is fine.
+    const readable = (r) => r.status !== 0 && r.status !== 405 && r.status < 500;
+    const homeNote = ok(home) || (home.status >= 300 && home.status < 400) ? '' : `; GET / answers ${home.status} (nothing to read at the homepage, which is fine)`;
     const allow = (post.headers.get('allow') ?? '').toUpperCase();
     const refused = (r) => r.status >= 400 && r.status < 500;
     const accepted = [['POST', post], ['PUT', put]].filter(([, r]) => r.status >= 200 && r.status < 400);
@@ -260,7 +267,7 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     else if (post.status >= 500 || put.status >= 500) wrong(id, name, level, `${[['POST', post], ['PUT', put]].filter(([, r]) => r.status >= 500).map(([m, r]) => `${m} / answers ${r.status}`).join(', ')}: a framework error, and the request reached code; refuse methods a route doesn't use, with 405`);
     else if (post.status === 405 && !allow) warn(id, name, level, 'POST / answers 405 without an Allow header (RFC 9110 requires one): send Allow with the methods / takes, such as GET, HEAD');
     else if (accepted.length) warn(id, name, level, `${accepted.map(([m, r]) => `${m} / answers ${r.status}`).join(', ')}: the homepage accepts ${accepted.map(([m]) => m).join(' and ')}. If nothing on / takes it, answer 405 with Allow: GET, HEAD`);
-    else if (refused(post) && refused(put)) pass(id, name, level, post.status === 405 ? `${both}, Allow: ${allow}` : `${both}: refused`);
+    else if (refused(post) && refused(put)) pass(id, name, level, (post.status === 405 ? `${both}, Allow: ${allow}` : `${both}: refused`) + homeNote);
     else warn(id, name, level, `${both}${post.error ? ` (${post.error})` : ''}`);
   }
 
@@ -286,8 +293,8 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     const problems = [];
     for (const { path: p, r } of rows) {
       if (r.tooBig) problems.push(`${shown(p)}: ${r.error}`);
-      else if (r.slow) problems.push(`${shown(p)}: ${r.error}`);
-      else if (r.status === 0 && /no answer/.test(r.error ?? '')) problems.push(`${shown(p)}: ${r.error} (a tarpit holds the connection)`);
+      else if (r.slow) problems.push(`${shown(p)}: ${r.error}${r.retried ? ', twice in a row' : ''}`);
+      else if (r.status === 0 && /no answer/.test(r.error ?? '')) problems.push(`${shown(p)}: ${r.error}${r.retried ? ', twice in a row' : ''} (a tarpit holds the connection, or the site is down)`);
       else if (r.status >= 300 && r.status < 400 && r.location && !onSite(r.location)) problems.push(`${shown(p)}: redirects to ${new URL(r.location).host}`);
     }
     const slowest = Math.max(...rows.map(({ r }) => r.ms ?? 0));
@@ -306,7 +313,7 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     const kinds = new Set(pranked.filter((x) => x.path !== echoPath).map(({ path: p, r }) => withoutPath(r.text, p))).size;
     const api = byApi.filter((x) => x.path !== echoPath).map(({ path: p, r }) => `${shown(p)} (${r.status} ${ct(r)})`);
     const edgeAndApi = edge + (api.length ? `; ${api.join(', ')} answered by the site's API` : '');
-    const tagged = pranked.some(({ r }) => taggedLinks([r.text, ...agentHeaders(r.headers).map(([, v]) => v)].join('\n')).length) ? ', with a tagged link to count follow-through' : '';
+    const tagged = pranked.some(({ r }) => taggedLinks([r.text, ...agentHeaders(r.headers).map(([, v]) => v)].join('\n')).length) ? ', with a link that carries a query string, which --logs --tag can count' : '';
     if (!prank) miss(id, name, level, `the probes get the site's ordinary 404 page${edgeAndApi}. That's safe; a prank is optional (see the menu)`);
     else if (plain.length) warn(id, name, level, `${got} of ${counted.length} probes that reached the site get a prank; no prank on ${plain.join(', ')}${edgeAndApi}`);
     else pass(id, name, level, `${got} of ${counted.length} probes that reached the site get a prank (${pranked[0].r.status} ${ct(pranked[0].r)}${kinds > 1 ? `, ${kinds} different replies` : ''}${tagged})${edgeAndApi}`);

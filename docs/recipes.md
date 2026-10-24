@@ -250,11 +250,11 @@ and not starts_with(http.request.uri.path, "/[your-content-prefix]/")
 
 ## Logs without a log export: Cloudflare's analytics (T2)
 
-Many small sites have no access log to give `--logs`: a CDN may export request logs only on some plans (check your zone's Logpush datasets; drifts.bot's Free plan zone had no HTTP request export on 2026-10-23), and a host may log only some routes, or lose its logs on a redeploy. Cloudflare's GraphQL Analytics API still counts every request at the edge, by path and status. Save its answer to a file and `--logs` reads it: each row stands for its `count` requests.
+Many small sites have no access log to give `--logs`: a CDN may export request logs only on some plans (check your zone's Logpush datasets; on drifts.bot's Free plan zone on 2026-10-24, the log download API answered 403 and no Logpush job was set up, and whether one could be created on Free wasn't tried, since creating one changes the zone's settings), and a host may log only some routes, or lose its logs on a redeploy. Cloudflare's GraphQL Analytics API still counts every request at the edge, by path and status. Save its answer to a file and `--logs` reads it: each row stands for its `count` requests.
 
 You need an API token with read access to analytics (Cloudflare's guide uses Account, Account Analytics, Read), and the zone ID from the zone's overview page. Keep the token in an environment variable, never in the repo.
 
-First, ask what your plan allows for this dataset: how long one query may span (`maxDuration`, in seconds), how far back it goes (`notOlderThan`), and how many rows one query returns (`maxPageSize`).
+First, ask what your plan allows for this dataset: how long one query may span (`maxDuration`, in seconds), how far back it goes (`notOlderThan`), and how many rows one query returns (`maxPageSize`). On drifts.bot's Free plan zone (measured 2026-10-24) one query could span 30 days, data went back 31 days, and a query returned up to 10,000 rows, so a whole week fits in one query.
 
 ```graphql
 query Limits($zoneTag: string) {
@@ -289,7 +289,7 @@ query Probes($zoneTag: string, $since: Time, $until: Time, $limit: uint64) {
         }
       ) {
         count
-        dimensions { clientRequestPath clientRequestHTTPMethodName edgeResponseStatus }
+        dimensions { clientRequestPath clientRequestHTTPMethodName edgeResponseStatus originResponseStatus clientRequestHTTPHost }
       }
     }
   }
@@ -311,7 +311,9 @@ npx security-pranks-audit@1 --logs probes-week.json
 - **The path filter only gathers candidates.** `--logs` classifies every row with its own probe families, so a filter that also catches a real page does no harm. Cloudflare's `like` treats `%` as a wildcard, and in practice `_` matches any one character too (`__vite` matched article URLs containing "invite" in [Bots in AI clothing](research/bots-in-ai-clothing.md)). Here that only over-matches, which is harmless.
 - **Counts are estimates.** Adaptive datasets are sampled when traffic is high, and Cloudflare returns counts scaled from the sample, so two runs over the same window can differ slightly.
 - **Only the top rows come back.** A query returns at most `limit` rows, busiest first, so paths past the limit are missing and the totals are a lower bound. If you get exactly `limit` rows, narrow the window or the filter.
-- **No addresses or user agents by default.** Add `userAgent` to `dimensions` to split probes by client family and count crawler-name disguises, at the cost of many more rows. Adding `clientIP` gives per-address counts but multiplies rows again; `--logs` never prints addresses either way.
+- **No addresses or user agents by default.** Add `userAgent` to `dimensions` to split probes by client family and count crawler-name disguises, at the cost of many more rows. Adding `clientIP` gives per-address counts but multiplies rows again; `--logs` never prints addresses either way. Both worked on drifts.bot's Free plan zone (2026-10-24).
+- **No query strings on the Free plan.** `clientRequestQuery` (and `clientRequestScheme`) answered "does not have access to the field" on drifts.bot's Free plan zone (2026-10-24), and the prank's link tags live in the query string. So `--tag` can't count follows from Free-plan analytics; `--logs` says so. Count tags from a log that keeps the query string.
+- **Redirects at the edge.** With `originResponseStatus` in `dimensions`, a 3xx whose origin status is 0 is a redirect Cloudflare sent itself (such as `www` to the bare domain, or http to https): the site never saw that request. `--logs` labels those "at the edge" instead of listing them as the site redirecting a probe. `clientRequestHTTPHost` shows which host it came in on.
 - **Retention is short.** Take the before numbers before you deploy: once the window passes `notOlderThan`, it's gone.
 - **Not every dataset is on every plan.** On drifts.bot's Free plan zone (2026-10-23), `firewallEventsAdaptiveGroups` answered "does not have access to the path", while `httpRequestsAdaptiveGroups` worked. When a saved answer has errors and no rows, `--logs` prints the errors and exits 2 rather than reporting zero probes.
 
