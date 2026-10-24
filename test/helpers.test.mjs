@@ -373,3 +373,31 @@ test('--logs fails a CI step only for probes that got a 2xx or a 5xx outside fam
   assert.equal(logsFail(image), false, 'a Next.js site whose pages use next/image serves /_next/image');
   assert.equal(image.succeeded_or_crashed[0].may_include_real_traffic, true);
 });
+
+test('a redirect is not a site serving a method: scanner POSTs that got a 307 and a 500 still fail', () => {
+  // From a real Railway log (2026-10-23): a scanner sent fake Next.js Server Actions to POST /, /api
+  // and /app, and each path got a 307 as well as a 500. Counting any 3xx as "served" dropped all
+  // three paths, so the 500s vanished and the report said every probe got a failure.
+  const tally = (lines) => { const t = logTally(); for (const l of lines) t.add(l); return t.result(); };
+  const line = (m, p, s) => `203.0.113.9 - - [23/Oct/2026:07:18:25 +0000] "${m} ${p} HTTP/1.1" ${s} 0 "-" "Mozilla/5.0"`;
+  const rep = tally(['/', '/api', '/app'].flatMap((p) => [line('POST', p, 307), line('POST', p, 500)]).concat(line('POST', '/', 404)));
+  assert.equal(logsFail(rep), true);
+  assert.ok(rep.succeeded_or_crashed.some((h) => h.request === '500 POST /'), JSON.stringify(rep.succeeded_or_crashed));
+  assert.equal(rep.kinds.find((k) => k.kind === 'POST requests')?.requests, 7);
+  // A form that posts and redirects with 303, or an API that answers 2xx, is still served.
+  assert.equal(logsFail(tally([line('POST', '/contact', 303), line('POST', '/contact', 500)])), false);
+  assert.equal(logsFail(tally([line('POST', '/api/pets', 201), line('POST', '/api/pets', 500)])), false);
+});
+
+test('a 5xx is never real traffic: framework endpoints, PHP and backups still fail on a crash', () => {
+  const tally = (lines) => { const t = logTally(); for (const l of lines) t.add(l); return t.result(); };
+  const line = (m, p, s) => `203.0.113.1 - - [23/Oct/2026:01:02:03 +0000] "${m} ${p} HTTP/1.1" ${s} 0 "-" "curl/8"`;
+  // The optimizer asked for a remote SVG, and crashed: the pattern behind GHSA-2464-fhr4-w9xw.
+  const image = tally([line('GET', '/_next/image?url=https%3A%2F%2Fevil.example%2Fa.svg&w=64&q=75', 500)]);
+  assert.equal(logsFail(image), true);
+  assert.equal(image.succeeded_or_crashed[0].may_include_real_traffic, false);
+  assert.equal(logsFail(tally([line('GET', '/index.php', 502)])), true);
+  assert.equal(logsFail(tally([line('GET', '/backup.zip', 500)])), true);
+  // Their 2xx stays exempt: a site may really serve them.
+  assert.equal(logsFail(tally([line('GET', '/_next/image?url=%2Fa.png&w=64&q=75', 200), line('GET', '/index.php', 200), line('GET', '/backup.zip', 200)])), false);
+});

@@ -154,10 +154,11 @@ export function logTally({ tags: wanted = [] } = {}) {
   const tags = new Map(); // tag -> count, for prank links followed
   // Requests with a method other than GET or HEAD, held per "method path" until
   // the end: on a site with an API, POST /api/... is real traffic. A method and
-  // path that got a 2xx or a 3xx anywhere in the log is one the site serves (a
-  // form that POSTs and redirects answers 303), not a probe.
+  // path that got a 2xx anywhere in the log is one the site serves, and so is one
+  // that got a 303 (a form that POSTs and redirects). Any other redirect isn't: a
+  // scanner's POSTs often get a 307 or 308 on the way to a crash.
   const methodRequests = new Map(); // "METHOD path" -> [{ record, n }]
-  const served = new Set(); // "METHOD path" that got a 2xx or a 3xx
+  const served = new Set(); // "METHOD path" that got a 2xx or a 303
   let methodsResolved = false;
   const add = (map, key, n) => map.set(key, (map.get(key) ?? 0) + n);
   // n identical requests counted as probes of this kind. ua is null when the data has no user agents.
@@ -175,7 +176,8 @@ export function logTally({ tags: wanted = [] } = {}) {
     add(k.families, r.ua === null ? 'User agent not in the data' : family(ua), n);
     if ((r.status >= 200 && r.status < 300) || r.status >= 500) {
       const key = `${r.status} ${r.method} ${r.path.slice(0, 80)}`;
-      if (!hits.has(key)) hits.set(key, { count: 0, kind, maybeReal: maybeReal(kind) });
+      // A family a site may serve can account for a 2xx, never for a crash: a 5xx always counts.
+      if (!hits.has(key)) hits.set(key, { count: 0, kind, maybeReal: maybeReal(kind) && r.status < 500 });
       hits.get(key).count += n;
     }
   };
@@ -194,7 +196,7 @@ export function logTally({ tags: wanted = [] } = {}) {
     const methodKind = kind === `${r.method} requests`;
     if (methodKind) {
       const key = `${r.method} ${r.path}`;
-      if (r.status >= 200 && r.status < 400) served.add(key);
+      if ((r.status >= 200 && r.status < 300) || r.status === 303) served.add(key);
       if (!methodRequests.has(key)) methodRequests.set(key, []);
       methodRequests.get(key).push({ record: r, n });
     }
