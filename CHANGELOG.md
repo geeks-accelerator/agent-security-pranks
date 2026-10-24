@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.5 (2026-10-24)
+
+From animalhouse.ai, whose H2 warning didn't apply. Fewer false warnings; no check newly fails.
+
+- **H2 reads the pages the homepage links to before warning.** On a site whose sitemap is mostly generated pages, the sample of 10 spread across it misses the few hand-built pages, which is where `next/image` usually is. animalhouse.ai's sitemap has 715 URLs, nearly all pet and agent pages; its `/how-it-works` uses the optimizer and was never in the sample, so H2 warned on every run and suggested answering 404, which would have broken that page. Now, when H2 would warn, it also reads up to 10 pages the homepage links to that the sample missed, and skips when one uses the endpoint. animalhouse now scores 8 of 8 required. The warning, when it stays, says how many linked pages it read. Up to 10 more requests, only on a Next.js site with a live optimizer that the sample didn't find in use.
+- New fixture sites: `gallery` (40 generated pages, one linked page that uses the optimizer: H2 skips) and `galleryunlinked` (the same without the link: H2 warns). `homeLinks()` lists a homepage's same-site page links, without assets, framework files, fragments or queries.
+
 ## 1.2.4 (2026-10-24)
 
 `--logs` finds every scanner 5xx it was built to find again, and the audit finds a prank that a varying 404 page hid. From reviews of 1.2.0 to 1.2.3, each fix with a test that fails without it.

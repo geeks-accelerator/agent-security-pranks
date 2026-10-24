@@ -46,6 +46,11 @@
 // text, which echoes the path as sent, capped at 200 characters, with a line for AI agents. Nothing
 // there is a prank, so P3, P4 and C2 skip and C1 warns; P5 skips it, as an ordinary 404.
 //
+// The gallery site is a Next.js app whose sitemap is mostly generated pages (40 items), with one
+// hand-built page, /how-it-works, that uses the live image optimizer and is linked from the homepage.
+// The sitemap sample misses it, so H2 reads the homepage's links and finds it: H2 skips, in use.
+// The galleryunlinked site is the same without the homepage link: nothing read uses it, H2 warns.
+//
 // The alias site redirects every request to another host: nothing of its own to score.
 // The blocked site's CDN answers the audit's homepage request with a block page.
 //
@@ -202,7 +207,20 @@ function apiOnly(req, res) {
 const alias = (req, res, path) => res.writeHead(301, { location: `https://elsewhere.example${path}` }).end();
 const blocked = (req, res) => res.writeHead(403, { server: 'cloudflare', 'content-type': 'text/html' }).end('<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>');
 
-const HANDLERS = { good, broken, api, cheeky, static: staticSite, stamped, stampedprank: stampedPrank, express, reflect, plain, flaky, apionly: apiOnly, alias, blocked };
+const GALLERY_PAGES = ['/', '/how-it-works', ...Array.from({ length: 40 }, (_, i) => `/items/${i + 1}`)];
+
+function gallery(req, res, path, domain, linked = true) {
+  if (!['GET', 'HEAD'].includes(req.method)) return res.writeHead(405, { allow: 'GET, HEAD', 'content-type': 'text/plain' }).end('Read-only.\n');
+  if (/^\/_next\/image(\/|$)/.test(path)) return res.writeHead(400, { 'content-type': 'text/plain' }).end('"url" parameter is not allowed\n');
+  if (path === '/robots.txt') return res.writeHead(200, { 'content-type': 'text/plain' }).end(`User-agent: *\nSitemap: https://${domain}/sitemap.xml\n`);
+  if (path === '/sitemap.xml') return res.writeHead(200, { 'content-type': 'application/xml' }).end(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${GALLERY_PAGES.map((p) => `<url><loc>https://${domain}${p}</loc></url>`).join('')}</urlset>`);
+  if (path === '/') return res.writeHead(200, { 'content-type': 'text/html' }).end(html('Gallery', linked ? '<nav><a href="/how-it-works">How it works</a> <a href="/items/1">Item 1</a> <a href="/logo.svg">logo</a></nav>' : '<nav><a href="/items/1">Item 1</a></nav>'));
+  if (path === '/how-it-works') return res.writeHead(200, { 'content-type': 'text/html' }).end(html('How it works', '<img alt="" src="/_next/image?url=%2Fhero.png&amp;w=640&amp;q=75">'));
+  if (GALLERY_PAGES.includes(path)) return res.writeHead(200, { 'content-type': 'text/html' }).end(html(`Item ${path}`));
+  return res.writeHead(404, { 'content-type': 'text/html' }).end(html('Page not found'));
+}
+
+const HANDLERS = { good, broken, api, cheeky, static: staticSite, stamped, stampedprank: stampedPrank, express, reflect, plain, flaky, apionly: apiOnly, gallery, galleryunlinked: (req, res, path, domain) => gallery(req, res, path, domain, false), alias, blocked };
 
 /** Start one fixture site. Returns { base, domain, log, hosts, close }. */
 export async function startFixture({ kind = 'good', domain = `${kind}.example` } = {}) {

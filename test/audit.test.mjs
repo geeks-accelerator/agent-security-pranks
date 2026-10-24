@@ -79,6 +79,17 @@ test('the broken fixture fails every required check, each for its planted reason
   assert.doesNotMatch(JSON.stringify(res), /127\.0\.0\.1/);
 });
 
+test('H2 reads the pages the homepage links to before warning that nothing uses the endpoint', async () => {
+  // A sitemap of generated pages hides the one hand-built page that uses /_next/image.
+  const linked = byId((await run('gallery')).rep);
+  assert.equal(linked.H2.status, 'skip', linked.H2.detail);
+  assert.match(linked.H2.detail, /\/how-it-works uses \/_next\/image, so it's in use/);
+  // Without the homepage link, nothing read uses it, and H2 warns, counting the linked page it read.
+  const unlinked = byId((await run('galleryunlinked')).rep);
+  assert.equal(unlinked.H2.status, 'warn', unlinked.H2.detail);
+  assert.match(unlinked.H2.detail, /none of the 10 pages read uses it \(of 42 in the sitemap\)/);
+});
+
 test('an app with an API and a form, and no prank, passes every required check', async () => {
   const { rep } = await run('api');
   const by = byId(rep);

@@ -8,14 +8,15 @@
 // PUT to / that create nothing. It never follows a redirect off the site. Node 22, 24 or 26 at its security release, no dependencies.
 
 import { request, TIMEOUT_MS } from './http.mjs';
-import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, taggedLinks, agentHeaders, sharedWords, holdsWords } from './helpers.mjs';
+import { PROBES, FRAMEWORK_ENDPOINTS, homeLinks, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, taggedLinks, agentHeaders, sharedWords, holdsWords } from './helpers.mjs';
 
-export const VERSION = '1.2.4';
+export const VERSION = '1.2.5';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
 const UA = `security-pranks-audit/${VERSION} (+${REPO})`;
 export const LEVELS = ['required', 'recommended'];
 const ORDER = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P8', 'H1', 'H2', 'X1', 'C1', 'C2'];
 const PAGES = 10; // sitemap pages read for P6
+const LINKED_PAGES = 10; // pages the homepage links to, read for H2 when the sample finds no use
 const LIMIT = 4; // requests in flight to one site
 
 // Items the scorecard can't see from outside. Each project checks these in review and tests.
@@ -279,14 +280,24 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
     const id = 'H2', name = 'Unused framework endpoints refused', level = 'required';
     // A page that uses the endpoint means it's in use. The audit reads a sample, so it fails only
     // when the sample is the whole sitemap; otherwise an unseen page might use it, and it warns.
-    const usedOn = framework ? sample.filter((u, i) => framework.used(pages[i])).map(path) : [];
+    // Before warning, it reads up to LINKED_PAGES pages the homepage links to that the sample
+    // missed: on a site whose sitemap is mostly generated pages, the hand-built ones are there.
+    let usedOn = framework ? sample.filter((u, i) => framework.used(pages[i])).map(path) : [];
     const wholeSite = sitePages.length > 0 && sitePages.length <= pages.length;
+    let linkedRead = 0;
+    if (framework && fw && fw.status !== 404 && !usedOn.length && !wholeSite) {
+      const sampled = new Set(sample.map((u) => new URL(u).pathname));
+      const linked = homeLinks(home.text, origin).filter((u) => onSite(u) && !sampled.has(new URL(u).pathname)).slice(0, LINKED_PAGES);
+      const linkedPages = await mapLimit(linked, LIMIT, (u) => get(u, { follow: true }));
+      linkedRead = linked.length;
+      usedOn = linked.filter((u, i) => ok(linkedPages[i]) && framework.used(linkedPages[i])).map(path);
+    }
     if (!framework) skip(id, name, level, `no framework with a known always-on endpoint found (checked ${FRAMEWORK_ENDPOINTS.map((f) => f.framework).join(', ')})`);
     else if (!fw) skip(id, name, level, `${framework.framework}: the homepage uses ${framework.label}, so it's in use; keep the framework patched (H3)`);
     else if (usedOn.length) skip(id, name, level, `${framework.framework}: ${usedOn[0]} uses ${framework.label}, so it's in use; keep the framework patched (H3)`);
     else if (fw.status === 404) pass(id, name, level, `${framework.framework}: ${framework.label} answers 404`);
     else if (wholeSite) wrong(id, name, level, `${framework.framework}: ${framework.label} answers ${fw.status || fw.error}, and none of the site's ${sitePages.length} sitemap pages uses it. Answer 404, so the next advisory in that endpoint can't reach you`);
-    else warn(id, name, level, `${framework.framework}: ${framework.label} answers ${fw.status || fw.error}, and none of the ${pages.length} pages read uses it${sitePages.length ? ` (of ${sitePages.length} in the sitemap)` : ''}. If no page uses it, answer 404 so the next advisory in that endpoint can't reach you; if one does, keep the framework patched`);
+    else warn(id, name, level, `${framework.framework}: ${framework.label} answers ${fw.status || fw.error}, and none of the ${pages.length} pages read uses it${sitePages.length ? ` (of ${sitePages.length} in the sitemap)` : ''}${linkedRead ? `, nor the ${linkedRead} more the homepage links to` : ''}. If no page uses it, answer 404 so the next advisory in that endpoint can't reach you; if one does, keep the framework patched`);
   }
 
   // ---- X1 no retaliation (required) ----

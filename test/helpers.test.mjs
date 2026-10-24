@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { sharedWords, holdsWords, isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, agentHeaders, taggedLinks, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
+import { sharedWords, holdsWords, isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, agentHeaders, taggedLinks, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper, homeLinks } from '../src/helpers.mjs';
 import { looksLikePrank } from '../src/audit.mjs';
 import { parseLine, family, probeKind, logTally, formatLogs, analyticsGroups, parseGroup, logsFail } from '../src/logs.mjs';
 
@@ -418,4 +418,11 @@ test('a 5xx is never real traffic: framework endpoints, PHP and backups still fa
   assert.equal(logsFail(tally([line('GET', '/backup.zip', 500)])), true);
   // Their 2xx stays exempt: a site may really serve them.
   assert.equal(logsFail(tally([line('GET', '/_next/image?url=%2Fa.png&w=64&q=75', 200), line('GET', '/index.php', 200), line('GET', '/backup.zip', 200)])), false);
+});
+
+test('homeLinks lists the same-site pages a homepage links to, nothing else', () => {
+  const html = '<a href="/how-it-works">a</a><a href="/how-it-works#faq">b</a><a href="https://example.com/animals?x=1">c</a>'
+    + '<a href="https://elsewhere.example/x">d</a><a href="/_next/static/a.js">e</a><a href="/logo.svg">f</a><a href="mailto:a@example.com">g</a><a href="/">h</a>';
+  assert.deepEqual(homeLinks(html, 'https://example.com'), ['https://example.com/how-it-works', 'https://example.com/animals']);
+  assert.deepEqual(homeLinks(undefined, 'https://example.com'), []);
 });
