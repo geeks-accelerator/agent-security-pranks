@@ -103,6 +103,18 @@ for (const [kind, page] of [['stamped', 'a 404 page with a request ID'], ['expre
   });
 }
 
+test('a prank in prose on a site whose 404 carries a request ID is found and graded', async () => {
+  // Through 1.2.3, on a site whose 404 differs on every request, only an env-shaped answer or one
+  // with another status or content type counted as a prank. A prose prank sent like the 404 went
+  // unfound, and P3 skipped it with no noindex.
+  const { rep } = await run('stampedprank');
+  const by = byId(rep);
+  assert.equal(rep.prank, true);
+  assert.equal(by.P3.status, 'fail', by.P3.detail);
+  assert.match(by.P3.detail, /no X-Robots-Tag: noindex/);
+  assert.equal(by.P8.status, 'pass', by.P8.detail);
+});
+
 test('an ordinary 404 that echoes the path as unescaped HTML still fails P5, prank or not', async () => {
   const { rep } = await run('reflect');
   const by = byId(rep);

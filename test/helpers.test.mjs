@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, agentHeaders, taggedLinks, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
+import { sharedWords, holdsWords, isSecretProbe, probeFamily, PROBES, credentialShapes, withoutPath, sitemapLocs, spread, echoProblems, edgeBlock, securityTxtProblem, agentHeaders, taggedLinks, secretAssignments, cacheProblem, instructsAgent, knownProbe, parsePrevious, compareResults, formatComparison, baseMapper } from '../src/helpers.mjs';
 import { looksLikePrank } from '../src/audit.mjs';
 import { parseLine, family, probeKind, logTally, formatLogs, analyticsGroups, parseGroup, logsFail } from '../src/logs.mjs';
 
@@ -372,6 +372,20 @@ test('--logs fails a CI step only for probes that got a 2xx or a 5xx outside fam
   const image = tally([line('GET', '/_next/image', 200)]);
   assert.equal(logsFail(image), false, 'a Next.js site whose pages use next/image serves /_next/image');
   assert.equal(image.succeeded_or_crashed[0].may_include_real_traffic, true);
+  // A crash is a crash whoever's pages use the endpoint: H2's harm is a framework endpoint that breaks.
+  const crash = tally([line('GET', '/_next/image?url=x', 500)]);
+  assert.equal(logsFail(crash), true, 'a 500 on /_next/image fails the step');
+  assert.equal(crash.succeeded_or_crashed[0].may_include_real_traffic, false);
+});
+
+test('sharedWords finds a varying 404 page\'s fixed part, and holdsWords tells that page from a prank', () => {
+  const a = 'Not found. Request ID: 3f2a-11', b = 'Not found. Request ID: 9c7e-42';
+  const fixed = sharedWords(a, b);
+  assert.deepEqual(fixed, ['Not', 'found.', 'Request', 'ID:']);
+  assert.equal(holdsWords('Not found. Request ID: 0000-77', fixed), true, 'the same page, another ID');
+  assert.equal(holdsWords('You were looking for secrets. The only one here is our opening hours.', fixed), false, 'a prank in prose');
+  assert.deepEqual(sharedWords('abc-1', 'def-2'), [], 'nothing shared');
+  assert.equal(holdsWords('anything', []), true);
 });
 
 test('a redirect is not a site serving a method: scanner POSTs that got a 307 and a 500 still fail', () => {

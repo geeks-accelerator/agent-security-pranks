@@ -8,7 +8,7 @@
 // PUT to / that create nothing. It never follows a redirect off the site. Node 22, 24 or 26 at its security release, no dependencies.
 
 import { request, TIMEOUT_MS } from './http.mjs';
-import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, taggedLinks, agentHeaders } from './helpers.mjs';
+import { PROBES, FRAMEWORK_ENDPOINTS, isSecretProbe, credentialShapes, withoutPath, baseMapper, sitemapLocs, spread, mapLimit, echoProblems, edgeBlock, secretAssignments, cacheProblem, instructsAgent, securityTxtProblem, taggedLinks, agentHeaders, sharedWords, holdsWords } from './helpers.mjs';
 
 export const VERSION = '1.2.3';
 export const REPO = 'https://github.com/geeks-accelerator/agent-security-pranks';
@@ -122,11 +122,14 @@ export async function audit(domain, { base = null, timeoutMs = TIMEOUT_MS } = {}
   const missingNorm = withoutPath(missing.text, missingPath);
   // Some 404 pages differ on every request (a request ID, a nonce, a timestamp), so "differs from
   // the ordinary 404" can't tell a prank from the site's own page there. Two missing pages that
-  // differ from each other show it; then only an env-shaped answer, or one whose status or content
-  // type differs from the ordinary 404, counts as a prank.
-  const variable404 = missing2.status === missing.status && withoutPath(missing2.text, missingPath2) !== missingNorm;
+  // differ from each other show it; then the words they share are the page's fixed part, and an
+  // answer is the ordinary 404 when it has the 404's status and content type and holds every one of
+  // them. When the two share no words, status and content type alone decide.
+  const missing2Norm = withoutPath(missing2.text, missingPath2);
+  const variable404 = missing2.status === missing.status && missing2Norm !== missingNorm;
+  const fixedWords = variable404 ? sharedWords(missingNorm, missing2Norm) : [];
   const unlike404 = (p, r) => (variable404
-    ? r.status !== missing.status || ct(r) !== ct(missing)
+    ? r.status !== missing.status || ct(r) !== ct(missing) || !holdsWords(withoutPath(r.text, p), fixedWords)
     : withoutPath(r.text, p) !== missingNorm);
   // An API's own error (JSON, or an auth or rate-limit status) is the API answering, not a prank:
   // sites with an API under /api answer /API/.ENV that way, and that's fine.

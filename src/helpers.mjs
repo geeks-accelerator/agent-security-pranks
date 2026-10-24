@@ -221,6 +221,15 @@ export function agentHeaders(headers) {
  */
 export const taggedLinks = (text) => [...String(text ?? '').matchAll(/https?:\/\/[^\s"'<>]+\?[^\s"'<>]+|(?<=[\s"'(])\/[^\s"'<>]*\?[^\s"'<>]+/g)].map((m) => m[0]);
 
+/**
+ * The words two answers share: on a 404 page that differs on every request (a request ID, a nonce, a
+ * timestamp), the page's fixed part. Both answers have the path taken out first (withoutPath).
+ */
+export const sharedWords = (a, b) => { const inB = new Set(String(b ?? '').split(/\s+/).filter(Boolean)); return [...new Set(String(a ?? '').split(/\s+/).filter((w) => w && inB.has(w)))]; };
+
+/** True when an answer holds every one of the words: it's the page they came from. */
+export const holdsWords = (text, words) => { const have = new Set(String(text ?? '').split(/\s+/)); return words.every((w) => have.has(w)); };
+
 // The shortest start of a path that counts as its echo when a site cuts the echo short (P5's
 // length cap): long enough that ordinary text on a 404 page won't match it by chance.
 const MIN_ECHO = 12;
