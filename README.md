@@ -61,7 +61,7 @@ This repo holds:
 
 ## Score a site
 
-It needs Node 22.23.4, 24.22.1 or 26.12.1, or later on the same line (each supported line's current security release), and has no dependencies. It sends about 20 requests, plus the sitemap and up to 10 of its pages, at most four at a time: eight probe paths, an echo test, two missing pages, `GET` and `HEAD /`, an empty `POST` and `PUT /` that create nothing, the framework endpoint it detects, and the sitemap pages. It asks for gzip or deflate and decodes it itself; a body in an encoding it didn't ask for, such as Brotli, is reported rather than read. It prints a pass, warning or failure for each check, with the reason, and exits with code 1 when a required check fails, so it can gate a deploy.
+It needs Node 22.23.4, 24.22.1 or 26.12.1, or later on the same line (each supported line's current security release), and has no dependencies. It sends about 20 requests, plus the sitemap and up to 10 of its pages (and, when H2 would warn, up to 10 pages the homepage links to), at most four at a time: eight probe paths, an echo test, two missing pages, `GET` and `HEAD /`, an empty `POST` and `PUT /` that create nothing, the framework endpoint it detects, and the sitemap pages. It asks for gzip or deflate and decodes it itself; a body in an encoding it didn't ask for, such as Brotli, is reported rather than read. It prints a pass, warning or failure for each check, with the reason, and exits with code 1 when a required check fails, so it can gate a deploy.
 
 **Run it only against sites you run.** Its requests look like the scanners it checks for, in your logs and to a firewall. It names itself in its user agent (`security-pranks-audit/<version> (+repo URL)`) so you can tell its requests apart.
 

@@ -296,6 +296,25 @@ export function baseMapper(domain, base) {
   return { hosts, baseOrigin, toBase, fromBase, hostFor };
 }
 
+/**
+ * The pages a homepage links to, as absolute URLs on its own origin: no assets, framework files,
+ * fragments or queries, each once, in page order. H2 reads them when the sitemap sample finds no
+ * page using the framework endpoint: the hand-built pages a homepage links to are where a large
+ * site's generated pages (pets, profiles, posts) don't use it and the few real pages do.
+ */
+export function homeLinks(html, origin) {
+  const out = [];
+  for (const [, href] of String(html ?? '').matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi)) {
+    let u;
+    try { u = new URL(href.replaceAll('&amp;', '&'), origin); } catch { continue; }
+    if (u.origin !== new URL(origin).origin || !/^https?:$/.test(u.protocol)) continue;
+    if (u.pathname.startsWith('/_next/') || /\.[a-z0-9]{1,5}$/i.test(u.pathname)) continue;
+    const page = u.origin + u.pathname;
+    if (u.pathname !== '/' && !out.includes(page)) out.push(page);
+  }
+  return out;
+}
+
 /** A sitemap's <loc> URLs, split into pages and child sitemaps (for a sitemap index). */
 export function sitemapLocs(xml) {
   const locs = [...String(xml ?? '').matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1].replace(/&amp;/g, '&'));

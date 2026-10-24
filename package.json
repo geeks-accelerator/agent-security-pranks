@@ -1,6 +1,6 @@
 {
   "name": "security-pranks-audit",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Check that your site answers .env, .git and other secret-hunting probes safely: a 4xx status, no credential-shaped strings, no-store, noindex, plain text, no retaliation. The scorecard for the Agent Security Pranks Standard.",
   "type": "module",
   "bin": {
